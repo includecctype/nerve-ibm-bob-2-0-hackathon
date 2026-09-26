@@ -8,6 +8,16 @@ export function wrapText(text: string, width: number): string {
 }
 
 /**
+ * Wrap text to a given column width and return the individual display lines.
+ */
+export function wrapLines(text: string, width: number): string[] {
+  if (width < 1) {
+    return [text];
+  }
+  return wrapAnsi(text, width, { hard: true, trim: false }).split("\n");
+}
+
+/**
  * Truncate text to the last `max_lines` lines.
  */
 export function truncateToLines(text: string, max_lines: number): string {
