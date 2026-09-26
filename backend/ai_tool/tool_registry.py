@@ -48,8 +48,19 @@ def getMainAgentTools(sid: str) -> list[Any]:
 
 
 def getSubAgentTools(sid: str) -> list[Any]:
-    """Return the tool set for sub-agent executors (file/shell + web, no graph or question tools)."""
-    file_tools = makeFileTool(sid)
+    """Return the tool set for sub-agent executors (file/shell + web, no graph or question tools).
+
+    Web sessions work against their OCI folder; CLI sessions forward the tools
+    to the client for local execution.
+    """
+    from gateway.storage.storage_events import storageFolder
+
+    if storageFolder(sid) is not None:
+        from ai_tool.file_ops.tool import makeOciFileTools
+
+        file_tools = makeOciFileTools(sid)
+    else:
+        file_tools = makeFileTool(sid)
     return [
         *file_tools,
         webSearch,
