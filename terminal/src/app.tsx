@@ -1,5 +1,6 @@
 import { Box, Text, render, useApp, useInput } from "ink";
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { filterCommands } from "./command/command_list.js";
 import { KeyPrompt } from "./command/key_prompt.js";
 import { ModelPicker } from "./command/model_picker.js";
 import { QuestionnaireBox } from "./command/questionnaire_box.js";
@@ -75,6 +76,7 @@ function App() {
   const [questions, setQuestions] = useState<StructuredQuestionDTO[] | null>(null);
   const [input_value, setInputValue] = useState("");
   const [command_mode, setCommandMode] = useState(false);
+  const [command_index, setCommandIndex] = useState(0);
   const [chat_scroll, setChatScroll] = useState(0);
   const [task_scroll, setTaskScroll] = useState(0);
   const [error_msg, setErrorMsg] = useState<string | null>(null);
@@ -297,6 +299,7 @@ function App() {
   const handleInputChange = (value: string) => {
     setInputValue(value);
     setCommandMode(value.startsWith("/"));
+    setCommandIndex(0);
   };
 
   const handlePromptSubmit = (raw: string) => {
@@ -310,6 +313,7 @@ function App() {
     }
     setInputValue("");
     setCommandMode(false);
+    setCommandIndex(0);
   };
 
   // ── Keyboard ──────────────────────────────────────────────────────────
@@ -334,9 +338,29 @@ function App() {
     }
     if (isMouseEvent(input)) return;
 
+    // Slash-command suggestions own Up/Down/Tab while command mode is active.
+    const suggestions = command_mode ? filterCommands(input_value) : [];
+    if (suggestions.length > 0) {
+      if (key.upArrow) {
+        setCommandIndex((index) => (index <= 0 ? suggestions.length - 1 : index - 1));
+        return;
+      }
+      if (key.downArrow) {
+        setCommandIndex((index) => (index >= suggestions.length - 1 ? 0 : index + 1));
+        return;
+      }
+      if (key.tab) {
+        const entry = suggestions[Math.min(command_index, suggestions.length - 1)];
+        if (entry) setInputValue(entry.name);
+        setCommandIndex(0);
+        return;
+      }
+    }
+
     if (key.escape) {
       setCommandMode(false);
       setInputValue("");
+      setCommandIndex(0);
       return;
     }
 
@@ -426,7 +450,9 @@ function App() {
       )}
 
       {/* Command suggestions */}
-      {!overlay && command_mode && <CommandOverlay input={input_value} />}
+      {!overlay && command_mode && (
+        <CommandOverlay input={input_value} selected_index={command_index} />
+      )}
 
       {/* Prompt box */}
       {!overlay && (
