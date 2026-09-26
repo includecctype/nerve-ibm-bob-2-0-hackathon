@@ -4,7 +4,7 @@ import asyncio
 import logging
 import uuid
 
-from gateway.config import sio
+from gateway.config import connected_users, sio
 from systemconfig.limits import TOOL_TIMEOUT_SECONDS
 
 logger = logging.getLogger(__name__)
@@ -20,23 +20,32 @@ def requestTool(
     timeout: int = TOOL_TIMEOUT_SECONDS,
 ) -> asyncio.Future:
     """
-    Emit a tool_request to the CLI, return a future that resolves when tool_result arrives.
-    Times out after `timeout` seconds and resolves with an error string.
+    Emit a tool_request to the CLI and return a future that resolves when the
+    matching tool_result arrives. Resolves with an error string on timeout or
+    when the session is gone.
     """
-    request_id = str(uuid.uuid4())
-    loop = asyncio.get_running_loop()
-    future: asyncio.Future = loop.create_future()
-    _pending[(sid, request_id)] = future
 
-    async def _emit_and_await():
-        await sio.emit("tool_request", {"id": request_id, "tool": tool, "args": args}, to=sid)
+    async def _emit_and_await() -> str:
+        if sid not in connected_users:
+            return "Error: the client for this session is not connected"
+
+        request_id = str(uuid.uuid4())
+        future: asyncio.Future = asyncio.get_running_loop().create_future()
+        _pending[(sid, request_id)] = future
         try:
-            return await asyncio.wait_for(asyncio.shield(future), timeout=timeout)
-        except TimeoutError:
+            await sio.emit(
+                "tool_request",
+                {"id": request_id, "tool": tool, "args": args},
+                to=sid,
+            )
+            try:
+                return await asyncio.wait_for(asyncio.shield(future), timeout=timeout)
+            except TimeoutError:
+                if not future.done():
+                    future.set_result(f"Error: tool '{tool}' timed out after {timeout}s")
+                return future.result()
+        finally:
             _pending.pop((sid, request_id), None)
-            if not future.done():
-                future.set_result(f"Error: tool '{tool}' timed out after {timeout}s")
-            return future.result()
 
     return asyncio.ensure_future(_emit_and_await())
 
@@ -45,10 +54,11 @@ async def resolveToolResult(sid: str, request_id: str, ok: bool, output: str) ->
     future = _pending.pop((sid, request_id), None)
     if future is None or future.done():
         return
-    if ok:
-        future.set_result(output)
-    else:
-        future.set_result(f"Error: {output}")
+    # The CLI already prefixes failures with "Error:"; only add it if missing so
+    # the model never sees "Error: Error: ...".
+    if not ok and not output.startswith("Error:"):
+        output = f"Error: {output}"
+    future.set_result(output)
 
 
 async def cancelPendingRequests(sid: str) -> None:

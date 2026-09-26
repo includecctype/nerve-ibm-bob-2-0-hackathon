@@ -35,6 +35,9 @@ def makeQuestionTool(sid: str):
         for item in questions:
             if not isinstance(item, dict):
                 return "Error: each question must be a JSON object with 'question' and 'options'"
+            question_text = item.get("question")
+            if not isinstance(question_text, str) or not question_text.strip():
+                return "Error: each question must have a non-empty 'question' string"
             options = item.get("options", [])
             if not isinstance(options, list) or not (2 <= len(options) <= 5):
                 return "Error: each question must have between 2 and 5 options"
