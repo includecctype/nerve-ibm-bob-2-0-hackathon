@@ -43,6 +43,8 @@ setUserData({
 
 const VALID_COMMANDS = ["/model", "/key", "/session", "/restart", "/exit"];
 
+const CONNECTION_HINT = "Not connected to the backend — press /model or /key to enter an API key.";
+
 type OverlayState =
   | { kind: "model" }
   | { kind: "key_select" }
@@ -81,7 +83,18 @@ function App() {
   const startSocket = useCallback(() => {
     const socket = connectSocket();
     const callbacks: ListenerCallbacks = {
-      onConnectionStatus: (ok) => setConnected(ok),
+      onConnectionStatus: (ok) => {
+        setConnected(ok);
+        if (!ok) {
+          setDisplays((prev) =>
+            prev.length > 0 &&
+            prev[prev.length - 1].role === "system" &&
+            prev[prev.length - 1].content === CONNECTION_HINT
+              ? prev
+              : [...prev, { role: "system", content: CONNECTION_HINT }],
+          );
+        }
+      },
       onMainAgentResponse: (text) => {
         setErrorMsg(null);
         setDisplays((prev) => [...prev, { role: "assistant", content: text }]);
@@ -370,53 +383,10 @@ function App() {
   });
 
   // ── Render ────────────────────────────────────────────────────────────
-  if (!connected) {
-    return <LogoView />;
-  }
-
   const session_entries = overlay?.kind === "session" ? buildSessionEntries() : [];
 
-  return (
-    <Box flexDirection="column" height={layout.rows}>
-      {/* Error banner */}
-      {error_msg && (
-        <Box>
-          <Text color="red" bold>
-            ⚠ {error_msg}
-          </Text>
-        </Box>
-      )}
-
-      {/* Main two-pane workspace */}
-      <Box flexGrow={1} flexDirection="row">
-        {/* Chat pane */}
-        <Box flexDirection="column" width={layout.chat_width}>
-          <ChatViewport
-            displays={displays}
-            scroll_offset={chat_scroll}
-            height={layout.chat_height}
-            width={layout.chat_width}
-          />
-        </Box>
-
-        {/* Divider */}
-        <Box width={1}>
-          <Text color="gray">│</Text>
-        </Box>
-
-        {/* Tasks pane */}
-        <Box flexDirection="column" flexGrow={1}>
-          <Text bold color="cyan">
-            Tasks
-          </Text>
-          <TaskPane
-            categories={categories}
-            scroll_offset={task_scroll}
-            height={layout.chat_height - 1}
-          />
-        </Box>
-      </Box>
-
+  const bottom_controls = (
+    <>
       {/* Questionnaire overlay */}
       {questions && (
         <QuestionnaireBox
@@ -466,6 +436,69 @@ function App() {
 
       {/* Footer */}
       <StatusFooter model_id={model_id} />
+    </>
+  );
+
+  // Until the backend accepts the connection the prompt and the model/key
+  // overlays must stay reachable — otherwise a missing API key is a dead end.
+  if (!connected) {
+    return (
+      <Box flexDirection="column" height={layout.rows}>
+        <LogoView />
+        {error_msg && (
+          <Box paddingX={1}>
+            <Text color="red" bold>
+              ⚠ {error_msg}
+            </Text>
+          </Box>
+        )}
+        {bottom_controls}
+      </Box>
+    );
+  }
+
+  return (
+    <Box flexDirection="column" height={layout.rows}>
+      {/* Error banner */}
+      {error_msg && (
+        <Box>
+          <Text color="red" bold>
+            ⚠ {error_msg}
+          </Text>
+        </Box>
+      )}
+
+      {/* Main two-pane workspace */}
+      <Box flexGrow={1} flexDirection="row">
+        {/* Chat pane */}
+        <Box flexDirection="column" width={layout.chat_width}>
+          <ChatViewport
+            displays={displays}
+            scroll_offset={chat_scroll}
+            height={layout.chat_height}
+            width={layout.chat_width}
+          />
+        </Box>
+
+        {/* Divider */}
+        <Box width={1}>
+          <Text color="gray">│</Text>
+        </Box>
+
+        {/* Tasks pane */}
+        <Box flexDirection="column" flexGrow={1}>
+          <Text bold color="cyan">
+            Tasks
+          </Text>
+          <TaskPane
+            categories={categories}
+            scroll_offset={task_scroll}
+            height={layout.chat_height - 1}
+          />
+        </Box>
+      </Box>
+
+      {bottom_controls}
     </Box>
   );
 }
