@@ -17,17 +17,19 @@ export function connectSocket(): Socket {
     socket_instance.disconnect();
   }
 
-  const data = getUserData();
-  const api_key = data.api_keys[String(data.main_agent_id)] ?? "";
-
   socket_instance = io(NERVE_BACKEND_URL, {
-    auth: {
-      api_key,
-      main_agent_id: data.main_agent_id,
-      categories: data.categories,
-      history: data.history,
+    // Re-evaluated on every (re)connect so fresh credentials and session state
+    // are always sent; the default transports keep the HTTP polling fallback.
+    auth: (cb) => {
+      const data = getUserData();
+      cb({
+        api_keys: data.api_keys,
+        api_key: data.api_keys[String(data.main_agent_id)] ?? "",
+        main_agent_id: data.main_agent_id,
+        categories: data.categories,
+        history: data.history,
+      });
     },
-    transports: ["websocket"],
   });
 
   return socket_instance;
