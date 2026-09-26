@@ -3,9 +3,9 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from langchain.agents import create_react_agent
 from langchain_core.language_models import BaseChatModel
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.prebuilt import create_react_agent
 
 from model.agent_session import AgentSession
 
