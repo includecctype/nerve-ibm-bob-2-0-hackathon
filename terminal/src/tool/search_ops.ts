@@ -1,14 +1,14 @@
 import type { Stats } from "node:fs";
 import { glob as fsGlob, readFile, stat } from "node:fs/promises";
 import { basename, relative, resolve, sep } from "node:path";
-import { GLOB_MAX_RESULTS, GREP_MAX_MATCHES, IGNORED_DIRS } from "../systemconfig/limits.js";
-import { resolveSafePath } from "./workspace.js";
+import { GLOB_MAX_RESULTS, GREP_MAX_MATCHES, IGNORED_DIR_NAMES } from "../systemconfig/limits";
+import { resolveSafePath } from "./workspace";
 
 function hasIgnoredPart(relative_path: string): boolean {
-  return relative_path.split(sep).some((part) => IGNORED_DIRS.has(part));
+  return relative_path.split(sep).some((part) => IGNORED_DIR_NAMES.has(part));
 }
 
-// The pattern is matched at any depth.
+// Python walked with rglob: the pattern is matched at any depth.
 function recursivePattern(pattern: string): string {
   return pattern.startsWith("**/") ? pattern : `**/${pattern}`;
 }

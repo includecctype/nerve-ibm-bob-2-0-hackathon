@@ -1,16 +1,16 @@
-import type { ToolRequestDTO } from "../dto/wire.js";
-import { DEFAULT_READ_LIMIT } from "../systemconfig/limits.js";
-import { asNumber, asOptionalString, asString } from "./args.js";
-import { editTool, listDirTool, readFileTool, writeFileTool } from "./file_ops.js";
-import { globTool, grepTool } from "./search_ops.js";
-import { shellTool } from "./shell.js";
+import type { ToolRequestDTO } from "../dto/wire";
+import { DEFAULT_READ_LIMIT } from "../systemconfig/limits";
+import { asNumber, asOptionalString, asString } from "./args";
+import { editTool, listDirTool, readFileTool, writeFileTool } from "./file_ops";
+import { globTool, grepTool } from "./search_ops";
+import { runTerminalCommand } from "./shell";
 
 // Dispatch one forwarded tool call to its local implementation. Never throws:
 // every outcome is a string the model can read, `Error:`-prefixed on failure.
-export async function executeToolRequest(req: ToolRequestDTO): Promise<string> {
-  const args = req.args ?? {};
+export async function executeToolRequest(request: ToolRequestDTO): Promise<string> {
+  const args = request.args ?? {};
   try {
-    switch (req.tool) {
+    switch (request.tool) {
       case "write":
         return await writeFileTool(
           asString(args.file_path),
@@ -40,9 +40,9 @@ export async function executeToolRequest(req: ToolRequestDTO): Promise<string> {
       case "glob":
         return await globTool(asString(args.pattern), asString(args.path) || ".");
       case "terminalCommand":
-        return await shellTool(asString(args.bash_command));
+        return await runTerminalCommand(asString(args.bash_command));
       default:
-        return `Error: unknown tool: ${req.tool}`;
+        return `Error: unknown tool: ${request.tool}`;
     }
   } catch (e) {
     return `Error: ${e instanceof Error ? e.message : String(e)}`;

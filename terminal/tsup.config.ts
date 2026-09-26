@@ -8,5 +8,8 @@ export default defineConfig({
     js: "#!/usr/bin/env node",
   },
   clean: true,
-  external: ["react", "ink"],
+  external: ["react", "react/jsx-runtime", "react/jsx-dev-runtime", "ink"],
+  esbuildOptions(options) {
+    options.jsx = "automatic";
+  },
 });

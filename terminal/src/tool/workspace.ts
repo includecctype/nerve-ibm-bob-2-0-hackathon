@@ -9,7 +9,7 @@ function getWorkspaceRoot(): string {
 }
 
 // Resolve a path inside the workspace, or return the same Error: string the
-// model used to see.
+// model used to see. Mirrors the backend's former resolve_safe_path.
 export function resolveSafePath(user_path: string): SafePathResult {
   if (!user_path?.trim()) {
     return { error: "Error: path must be a non-empty string" };

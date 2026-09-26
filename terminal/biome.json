@@ -16,7 +16,7 @@
     "lineWidth": 100
   },
   "javascript": {
-    "jsxRuntime": "reactClassic",
+    "jsxRuntime": "transparent",
     "formatter": {
       "quoteStyle": "double",
       "trailingCommas": "all",

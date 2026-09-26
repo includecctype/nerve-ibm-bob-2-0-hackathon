@@ -1,93 +1,175 @@
+import { Spinner } from "@inkjs/ui";
 import { Box, Text } from "ink";
-import React from "react";
-import type { TaskCategoryDTO } from "../dto/wire.js";
-import { wrapLines, windowFromTop } from "./text_window.js";
-import { theme } from "./theme.js";
+import type { TaskCategoryDTO } from "../dto/wire";
+import { StatusFooter } from "./status_footer";
+import { wrapLines } from "./text_window";
+import { BG_PANEL } from "./theme";
 
-interface TaskPaneProps {
-  categories: TaskCategoryDTO[];
-  scroll_offset: number;
-  height: number;
-  width: number;
-}
+export type TaskLine =
+  | {
+      type: "category";
+      key: string;
+      label: string;
+      status: TaskCategoryDTO["status"];
+      waitsOn: string;
+    }
+  | {
+      type: "task_line";
+      key: string;
+      status: "pending" | "running" | "done" | "failed";
+      text: string;
+      showGutter: boolean;
+    }
+  | { type: "blank"; key: string };
 
-type TaskRow = {
-  text: string;
-  color: string;
+export type TaskWindow = {
+  visible: TaskLine[];
+  startIndex: number;
+  maxScroll: number;
 };
 
-function categoryIcon(status: TaskCategoryDTO["status"]): string {
-  switch (status) {
-    case "done":
-      return "✓";
-    case "failed":
-      return "✗";
-    case "blocked":
-      return "⊘";
-    case "running":
-      return "▶";
-    default:
-      return "○";
+export function buildTaskLines(tasks: TaskCategoryDTO[], task_text_width: number): TaskLine[] {
+  if (tasks.length === 0) {
+    return [];
   }
+
+  const lines: TaskLine[] = [];
+  tasks.forEach((category, category_index) => {
+    lines.push({
+      type: "category",
+      key: `c-${category_index}`,
+      label: category.name,
+      status: category.status,
+      waitsOn:
+        category.status === "pending" && category.depends_on.length > 0
+          ? category.depends_on.join(", ")
+          : "",
+    });
+    category.tasks.forEach((task, task_index) => {
+      const wrapped = wrapLines(task.description, task_text_width);
+      wrapped.forEach((text, line_index) => {
+        lines.push({
+          type: "task_line",
+          key: `t-${category_index}-${task_index}:${line_index}`,
+          status: task.status,
+          text,
+          showGutter: line_index === 0,
+        });
+      });
+    });
+    lines.push({ type: "blank", key: `b-${category_index}` });
+  });
+  return lines;
 }
 
-function categoryColor(status: TaskCategoryDTO["status"]): string {
-  switch (status) {
-    case "done":
-      return theme.success;
-    case "failed":
-      return theme.error;
-    case "blocked":
-      return theme.blocked;
-    case "running":
-      return theme.running;
-    default:
-      return theme.muted;
-  }
-}
+type TaskPaneProps = {
+  taskWindow: TaskWindow;
+  taskScroll: number;
+  taskGutterWidth: number;
+  width: number;
+  cwd: string;
+  modelLabel: string;
+};
 
-function taskColor(status: string): string {
-  switch (status) {
-    case "running":
-      return theme.running;
-    case "done":
-      return theme.success;
-    case "failed":
-      return theme.error;
-    default:
-      return theme.muted;
-  }
-}
-
-export function TaskPane({ categories, scroll_offset, height, width }: TaskPaneProps) {
-  const rows: TaskRow[] = [];
-  const safe_width = Math.max(1, width);
-
-  for (const cat of categories) {
-    const icon = categoryIcon(cat.status);
-    const color = categoryColor(cat.status);
-    const waits = cat.depends_on.length > 0 ? ` (waits: ${cat.depends_on.join(", ")})` : "";
-    for (const line of wrapLines(`${icon} ${cat.name}${waits}`, safe_width)) {
-      rows.push({ text: line, color });
-    }
-
-    for (const task of cat.tasks) {
-      const spinner = task.status === "running" ? " ⠿" : "";
-      for (const line of wrapLines(`  ${task.description}${spinner}`, safe_width)) {
-        rows.push({ text: line, color: taskColor(task.status) });
-      }
-    }
-  }
-
-  const { visible, startIndex } = windowFromTop(rows, height, scroll_offset);
-
+export function TaskPane({
+  taskWindow,
+  taskScroll,
+  taskGutterWidth,
+  width,
+  cwd,
+  modelLabel,
+}: TaskPaneProps) {
   return (
-    <Box flexDirection="column" height={height} overflow="hidden">
-      {visible.map((row, index) => (
-        <Text key={`task-row-${startIndex + index}`} color={row.color}>
-          {row.text}
-        </Text>
-      ))}
+    <Box width={width} height="100%" flexDirection="column" display="flex" flexShrink={0}>
+      <Box
+        width="100%"
+        flexGrow={1}
+        flexShrink={1}
+        minHeight={0}
+        flexDirection="column"
+        display="flex"
+        backgroundColor={BG_PANEL}
+        paddingX={1}
+        paddingY={1}
+        overflow="hidden"
+      >
+        <Text bold>Tasks</Text>
+        {taskWindow.visible.length === 0 ? (
+          <Text dimColor>No tasks yet</Text>
+        ) : (
+          taskWindow.visible.map((line) => {
+            if (line.type === "blank") {
+              return <Text key={line.key}> </Text>;
+            }
+            if (line.type === "category") {
+              const marker =
+                line.status === "done"
+                  ? "✓ "
+                  : line.status === "failed"
+                    ? "✗ "
+                    : line.status === "blocked"
+                      ? "⊘ "
+                      : "▶ ";
+              const color =
+                line.status === "done"
+                  ? "green"
+                  : line.status === "failed"
+                    ? "red"
+                    : line.status === "blocked"
+                      ? "yellow"
+                      : undefined;
+              return (
+                <Text key={line.key} bold color={color}>
+                  {marker}
+                  {line.label}
+                  {line.status === "running" ? " …" : ""}
+                  {line.waitsOn ? <Text dimColor>{` (waits: ${line.waitsOn})`}</Text> : null}
+                </Text>
+              );
+            }
+            if (line.status === "running") {
+              return (
+                <Box key={line.key} flexDirection="row">
+                  <Box width={taskGutterWidth} flexShrink={0}>
+                    {line.showGutter ? <Spinner /> : null}
+                  </Box>
+                  <Text color="green">{line.text}</Text>
+                </Box>
+              );
+            }
+            if (line.status === "done" || line.status === "failed") {
+              const failed = line.status === "failed";
+              return (
+                <Box key={line.key} flexDirection="row">
+                  <Box width={taskGutterWidth} flexShrink={0}>
+                    <Text color={failed ? "red" : "green"}>
+                      {line.showGutter ? (failed ? "✗" : "✓") : " "}
+                    </Text>
+                  </Box>
+                  <Text dimColor={failed ? undefined : true} color={failed ? "red" : undefined}>
+                    {line.text}
+                  </Text>
+                </Box>
+              );
+            }
+            return (
+              <Box key={line.key} flexDirection="row">
+                <Box width={taskGutterWidth} flexShrink={0}>
+                  <Text> </Text>
+                </Box>
+                <Text dimColor>{line.text}</Text>
+              </Box>
+            );
+          })
+        )}
+        {taskWindow.maxScroll > 0 && (
+          <Text dimColor>
+            {taskScroll > 0 ? `↑ ${taskScroll} ` : ""}
+            {taskScroll < taskWindow.maxScroll ? "↓" : ""}
+          </Text>
+        )}
+      </Box>
+      <StatusFooter width={width} cwd={cwd} modelLabel={modelLabel} />
     </Box>
   );
 }
