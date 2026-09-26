@@ -1,0 +1,466 @@
+import { Box, Text, render, useApp, useInput } from "ink";
+import React, { useCallback, useEffect, useState } from "react";
+import { KeyPrompt } from "./command/key_prompt.js";
+import { ModelPicker } from "./command/model_picker.js";
+import { QuestionnaireBox } from "./command/questionnaire_box.js";
+import { type SessionEntry, SessionPicker } from "./command/session_picker.js";
+import type {
+  DisplayHistoryDTO,
+  QuestionnaireAnswerDTO,
+  StructuredQuestionDTO,
+  TaskCategoryDTO,
+  TaskUpdatePayload,
+} from "./dto/wire.js";
+import { splitInputChunk, useBracketedPaste } from "./hooks/use_bracketed_paste.js";
+import { useLayout } from "./hooks/use_layout.js";
+import { isMouseEvent, parseWheelEvent, useMouseTracking } from "./hooks/use_mouse_wheel.js";
+import { ensureConfigFile, readConfig, readSessionData } from "./save/config_reader.js";
+import { saveDisplayHistory, waitForWrites, writeUserDataToFile } from "./save/config_writer.js";
+import { commitSession, getUserData, setUserData } from "./session/user_data.js";
+import { connectSocket, disconnectSocket } from "./socket/client.js";
+import {
+  emitAgentErrorResponse,
+  emitQuestionnaireAnswers,
+  emitUserPrompt,
+} from "./socket/emitters.js";
+import { attachHandlers } from "./socket/handler_registry.js";
+import type { ListenerCallbacks } from "./socket/listener.js";
+import { getModelLabel } from "./systemconfig/model.js";
+import { ChatViewport } from "./ui/chat_viewport.js";
+import { CommandOverlay } from "./ui/command_overlay.js";
+import { LogoView } from "./ui/logo_view.js";
+import { PromptBox } from "./ui/prompt_box.js";
+import { StatusFooter } from "./ui/status_footer.js";
+import { TaskPane } from "./ui/task_pane.js";
+
+// ── Bootstrap ──────────────────────────────────────────────────────────────
+ensureConfigFile();
+const stored_config = readConfig();
+setUserData({
+  api_keys: stored_config.api_key,
+  main_agent_id: stored_config.main_agent_id,
+});
+
+const VALID_COMMANDS = ["/model", "/key", "/session", "/restart", "/exit"];
+
+type OverlayState =
+  | { kind: "model" }
+  | { kind: "key_select" }
+  | { kind: "key"; model_id: number; switch_after: boolean }
+  | { kind: "session" };
+
+function buildSessionEntries(): SessionEntry[] {
+  const config = readConfig();
+  return Object.entries(config.session ?? {}).map(([session_id, session]) => ({
+    id: session_id,
+    label: `${new Date(session.last_updated ?? 0).toLocaleString()} — ${
+      session.categories.length
+    } categories`,
+  }));
+}
+
+function App() {
+  const { exit } = useApp();
+  const layout = useLayout();
+  const sanitize = useBracketedPaste();
+  useMouseTracking();
+
+  const [connected, setConnected] = useState(false);
+  const [displays, setDisplays] = useState<DisplayHistoryDTO[]>([]);
+  const [categories, setCategories] = useState<TaskCategoryDTO[]>([]);
+  const [questions, setQuestions] = useState<StructuredQuestionDTO[] | null>(null);
+  const [input_value, setInputValue] = useState("");
+  const [command_mode, setCommandMode] = useState(false);
+  const [chat_scroll, setChatScroll] = useState(0);
+  const [task_scroll, setTaskScroll] = useState(0);
+  const [error_msg, setErrorMsg] = useState<string | null>(null);
+  const [overlay, setOverlay] = useState<OverlayState | null>(null);
+  const [model_id, setModelId] = useState(getUserData().main_agent_id);
+
+  // ── Socket wiring ─────────────────────────────────────────────────────
+  const startSocket = useCallback(() => {
+    const socket = connectSocket();
+    const callbacks: ListenerCallbacks = {
+      onConnectionStatus: (ok) => setConnected(ok),
+      onMainAgentResponse: (text) => {
+        setErrorMsg(null);
+        setDisplays((prev) => [...prev, { role: "assistant", content: text }]);
+      },
+      onTaskUpdate: (payload: TaskUpdatePayload) => setCategories(payload.categories),
+      onSubagentResponse: () => {
+        // display-only progress; never forwarded to the main agent
+      },
+      onQuestionnaire: (qs) => setQuestions(qs),
+      onAgentError: (message) => {
+        setErrorMsg(message);
+        emitAgentErrorResponse(message);
+      },
+    };
+    attachHandlers(socket, callbacks);
+  }, []);
+
+  const reconnect = useCallback(async () => {
+    await waitForWrites();
+    setConnected(false);
+    startSocket();
+  }, [startSocket]);
+
+  useEffect(() => {
+    startSocket();
+
+    // Flush config and drop the socket so the event loop can drain.
+    const flush = async () => {
+      await waitForWrites();
+      disconnectSocket();
+      exit();
+    };
+    process.on("SIGINT", flush);
+    process.on("SIGTERM", flush);
+
+    return () => {
+      process.off("SIGINT", flush);
+      process.off("SIGTERM", flush);
+      // Unmounting must also drop the socket, otherwise its reconnect timers
+      // keep the event loop alive and the process never quits.
+      disconnectSocket();
+    };
+  }, [startSocket, exit]);
+
+  // ── Slash commands ────────────────────────────────────────────────────
+  const handleCommand = useCallback(
+    async (cmd: string) => {
+      switch (cmd) {
+        case "/exit":
+          await waitForWrites();
+          disconnectSocket();
+          exit();
+          break;
+        case "/restart":
+          await waitForWrites();
+          setDisplays([]);
+          setCategories([]);
+          setQuestions(null);
+          setOverlay(null);
+          setErrorMsg(null);
+          setChatScroll(0);
+          setTaskScroll(0);
+          setInputValue("");
+          setCommandMode(false);
+          setConnected(false);
+          startSocket();
+          break;
+        case "/model":
+          setOverlay({ kind: "model" });
+          break;
+        case "/key":
+          setOverlay({ kind: "key_select" });
+          break;
+        case "/session":
+          setOverlay({ kind: "session" });
+          break;
+        default:
+          setDisplays((prev) => [
+            ...prev,
+            {
+              role: "system",
+              content: `Unknown command: ${cmd}. Valid: ${VALID_COMMANDS.join(", ")}`,
+            },
+          ]);
+      }
+    },
+    [exit, startSocket],
+  );
+
+  // ── Overlay flows ─────────────────────────────────────────────────────
+  const applyModel = useCallback(
+    async (next_model_id: number) => {
+      setUserData({ main_agent_id: next_model_id });
+      setModelId(next_model_id);
+      writeUserDataToFile();
+      setOverlay(null);
+      await reconnect();
+    },
+    [reconnect],
+  );
+
+  const handleModelSelect = (selected_id: number) => {
+    const keys = getUserData().api_keys;
+    if (!keys[String(selected_id)]) {
+      setOverlay({ kind: "key", model_id: selected_id, switch_after: true });
+      return;
+    }
+    void applyModel(selected_id);
+  };
+
+  const handleKeyTargetSelect = (selected_id: number) => {
+    setOverlay({
+      kind: "key",
+      model_id: selected_id,
+      switch_after: selected_id === getUserData().main_agent_id,
+    });
+  };
+
+  const handleKeySubmit = async (value: string) => {
+    if (!overlay || overlay.kind !== "key") return;
+    const keys = getUserData().api_keys;
+    setUserData({ api_keys: { ...keys, [String(overlay.model_id)]: value } });
+    writeUserDataToFile();
+    setOverlay(null);
+    if (overlay.switch_after) {
+      await applyModel(overlay.model_id);
+    }
+  };
+
+  const handleSessionSelect = async (session_id: string | null) => {
+    setOverlay(null);
+    if (session_id === null) {
+      setUserData({
+        session_id: crypto.randomUUID(),
+        categories: [],
+        history: [],
+        committed: false,
+      });
+      setCategories([]);
+      setDisplays([]);
+      setChatScroll(0);
+      await reconnect();
+      return;
+    }
+
+    const saved = readSessionData(readConfig(), session_id);
+    if (!saved) return;
+    setUserData({
+      session_id,
+      categories: saved.categories,
+      history: saved.history,
+      committed: true,
+    });
+    setCategories(saved.categories);
+    setDisplays(saved.history);
+    setChatScroll(0);
+    await reconnect();
+  };
+
+  const handleQuestionnaireComplete = (answers: QuestionnaireAnswerDTO[]) => {
+    setQuestions(null);
+    emitQuestionnaireAnswers(answers);
+    const summary = answers
+      .map((answer) => `Q: ${answer.question}\nA: ${answer.answer}`)
+      .join("\n\n");
+    const entry: DisplayHistoryDTO = { role: "system", content: summary };
+    saveDisplayHistory(entry);
+    setDisplays((prev) => [...prev, entry]);
+  };
+
+  const handleSubmit = (text: string) => {
+    if (!text.trim()) return;
+    commitSession();
+    const entry: DisplayHistoryDTO = { role: "user", content: text };
+    saveDisplayHistory(entry);
+    setDisplays((prev) => [...prev, entry]);
+    emitUserPrompt(text);
+  };
+
+  // chat_scroll counts lines scrolled up from the newest message: 0 is pinned
+  // to the bottom, so new messages appear without touching the scroll state.
+  const max_chat_scroll = Math.max(displays.length - layout.chat_height, 0);
+
+  // ── Keyboard ──────────────────────────────────────────────────────────
+  useInput((input, key) => {
+    // Overlays and the questionnaire own the keyboard while they are open.
+    if (overlay || questions) return;
+
+    const wheel = parseWheelEvent(input);
+    if (wheel) {
+      const over_tasks = wheel.column - 1 >= layout.chat_width;
+      if (wheel.direction === "up") {
+        if (over_tasks) setTaskScroll((value) => Math.max(0, value - 1));
+        else setChatScroll((value) => Math.min(max_chat_scroll, value + 1));
+      } else if (over_tasks) {
+        setTaskScroll((value) => value + 1);
+      } else {
+        setChatScroll((value) => Math.max(0, value - 1));
+      }
+      return;
+    }
+    if (isMouseEvent(input)) return;
+
+    const { text, submitted } = splitInputChunk(input);
+    const chunk = sanitize(text);
+
+    // Command mode toggle
+    if (chunk === "/" && input_value === "" && !command_mode) {
+      setCommandMode(true);
+      setInputValue("/");
+      return;
+    }
+
+    if (key.escape) {
+      setCommandMode(false);
+      setInputValue("");
+      return;
+    }
+
+    if (key.return || submitted) {
+      const full = `${input_value}${chunk}`.trim();
+      // Command mode, or a whole command pasted into an empty prompt.
+      if (command_mode || (input_value === "" && full.startsWith("/"))) {
+        void handleCommand(full);
+      } else {
+        handleSubmit(full);
+      }
+      setInputValue("");
+      setCommandMode(false);
+      return;
+    }
+
+    if (key.backspace || key.delete) {
+      setInputValue((value) => value.slice(0, -1));
+      return;
+    }
+
+    // Scrolling (chat_scroll counts lines scrolled up from the bottom)
+    if (key.pageUp) {
+      setChatScroll((value) =>
+        Math.min(max_chat_scroll, value + Math.floor(layout.chat_height / 2)),
+      );
+      return;
+    }
+    if (key.pageDown) {
+      setChatScroll((value) => Math.max(0, value - Math.floor(layout.chat_height / 2)));
+      return;
+    }
+    if (key.home) {
+      setChatScroll(max_chat_scroll);
+      return;
+    }
+    if (key.end) {
+      setChatScroll(0);
+      return;
+    }
+    if (key.upArrow && key.ctrl) {
+      setTaskScroll((value) => Math.max(0, value - 1));
+      return;
+    }
+    if (key.downArrow && key.ctrl) {
+      setTaskScroll((value) => value + 1);
+      return;
+    }
+
+    const prompt_is_multiline = input_value.includes("\n");
+    if (!prompt_is_multiline && key.upArrow) {
+      setChatScroll((value) => Math.min(max_chat_scroll, value + 1));
+      return;
+    }
+    if (!prompt_is_multiline && key.downArrow) {
+      setChatScroll((value) => Math.max(0, value - 1));
+      return;
+    }
+
+    if (!key.ctrl && !key.meta && chunk) {
+      setInputValue((value) => value + chunk);
+    }
+  });
+
+  // ── Render ────────────────────────────────────────────────────────────
+  if (!connected) {
+    return <LogoView />;
+  }
+
+  const session_entries = overlay?.kind === "session" ? buildSessionEntries() : [];
+
+  return (
+    <Box flexDirection="column" height={layout.rows}>
+      {/* Error banner */}
+      {error_msg && (
+        <Box>
+          <Text color="red" bold>
+            ⚠ {error_msg}
+          </Text>
+        </Box>
+      )}
+
+      {/* Main two-pane workspace */}
+      <Box flexGrow={1} flexDirection="row">
+        {/* Chat pane */}
+        <Box flexDirection="column" width={layout.chat_width}>
+          <ChatViewport
+            displays={displays}
+            scroll_offset={chat_scroll}
+            height={layout.chat_height}
+            width={layout.chat_width}
+          />
+        </Box>
+
+        {/* Divider */}
+        <Box width={1}>
+          <Text color="gray">│</Text>
+        </Box>
+
+        {/* Tasks pane */}
+        <Box flexDirection="column" flexGrow={1}>
+          <Text bold color="cyan">
+            Tasks
+          </Text>
+          <TaskPane
+            categories={categories}
+            scroll_offset={task_scroll}
+            height={layout.chat_height - 1}
+          />
+        </Box>
+      </Box>
+
+      {/* Questionnaire overlay */}
+      {questions && (
+        <QuestionnaireBox
+          questions={questions}
+          onComplete={handleQuestionnaireComplete}
+          onCancel={() => setQuestions(null)}
+        />
+      )}
+
+      {/* Slash-command overlays */}
+      {overlay?.kind === "model" && (
+        <ModelPicker
+          current_id={model_id}
+          api_keys={getUserData().api_keys}
+          onSelect={handleModelSelect}
+          onCancel={() => setOverlay(null)}
+        />
+      )}
+      {overlay?.kind === "key_select" && (
+        <ModelPicker
+          current_id={model_id}
+          api_keys={getUserData().api_keys}
+          onSelect={handleKeyTargetSelect}
+          onCancel={() => setOverlay(null)}
+        />
+      )}
+      {overlay?.kind === "key" && (
+        <KeyPrompt
+          model_label={getModelLabel(overlay.model_id)}
+          onSubmit={(value) => void handleKeySubmit(value)}
+          onCancel={() => setOverlay(null)}
+        />
+      )}
+      {overlay?.kind === "session" && (
+        <SessionPicker
+          sessions={session_entries}
+          onSelect={(session_id) => void handleSessionSelect(session_id)}
+          onCancel={() => setOverlay(null)}
+        />
+      )}
+
+      {/* Command suggestions */}
+      {!overlay && command_mode && <CommandOverlay input={input_value} />}
+
+      {/* Prompt box */}
+      {!overlay && <PromptBox value={input_value} command_mode={command_mode} />}
+
+      {/* Footer */}
+      <StatusFooter model_id={model_id} />
+    </Box>
+  );
+}
+
+render(<App />);
