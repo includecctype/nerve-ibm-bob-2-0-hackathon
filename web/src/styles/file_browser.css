@@ -1,0 +1,79 @@
+.file-explorer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: #0e141b;
+  border-right: 1px solid #1c2633;
+}
+
+.explorer-header {
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #8b98a9;
+  border-bottom: 1px solid #1c2633;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.explorer-tree {
+  flex: 1;
+  overflow: auto;
+  padding: 4px 0;
+}
+
+.tree-children {
+  display: flex;
+  flex-direction: column;
+}
+
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #c8d2df;
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.file-row:hover {
+  background: #141c26;
+}
+
+.file-row.selected {
+  background: #1b2a3a;
+  color: #eaf2fb;
+}
+
+.file-row .caret {
+  width: 10px;
+  flex: none;
+  color: #7d8ea3;
+}
+
+.file-row .file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-row .file-size {
+  flex: none;
+  color: #5f6f82;
+  font-size: 11px;
+}
+
+.explorer-error {
+  color: #ff8b8b;
+  font-size: 12px;
+  padding: 4px 8px;
+  white-space: pre-wrap;
+}
