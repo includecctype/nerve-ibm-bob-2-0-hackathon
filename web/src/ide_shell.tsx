@@ -20,16 +20,16 @@ export function IdeShell() {
         </span>
       </header>
       <main className="ide-body">
-        <section className="ide-pane ide-terminal" aria-label="Terminal">
-          <InkXterm focus>
-            <App />
-          </InkXterm>
-        </section>
         <section className="ide-pane ide-explorer" aria-label="File explorer">
           <FileExplorer selected_path={selected_path} on_select={setSelectedPath} />
         </section>
         <section className="ide-pane ide-viewer" aria-label="File viewer">
           <FileViewer path={selected_path} />
+        </section>
+        <section className="ide-pane ide-terminal" aria-label="Terminal">
+          <InkXterm focus>
+            <App />
+          </InkXterm>
         </section>
       </main>
     </div>

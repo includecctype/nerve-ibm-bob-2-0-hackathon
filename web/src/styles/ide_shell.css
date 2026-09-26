@@ -30,7 +30,11 @@
 .ide-body {
   flex: 1;
   display: grid;
-  grid-template-columns: 1.15fr 0.6fr 0.95fr;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  grid-template-areas:
+    "explorer viewer"
+    "terminal terminal";
   min-height: 0;
 }
 
@@ -40,8 +44,18 @@
   overflow: hidden;
 }
 
+.ide-explorer {
+  grid-area: explorer;
+}
+
+.ide-viewer {
+  grid-area: viewer;
+}
+
 .ide-terminal {
+  grid-area: terminal;
   display: flex;
+  min-height: 50%;
 }
 
 .ide-terminal > div {
@@ -52,6 +66,10 @@
 @media (max-width: 900px) {
   .ide-body {
     grid-template-columns: 1fr;
-    grid-template-rows: 2fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr 1fr;
+    grid-template-areas:
+      "explorer"
+      "viewer"
+      "terminal";
   }
 }
