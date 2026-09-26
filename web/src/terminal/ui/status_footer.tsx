@@ -33,7 +33,7 @@ export function StatusFooter({ width, cwd, modelLabel }: StatusFooterProps) {
       paddingTop={STATUS_FOOTER_TOP_PAD}
     >
       <Box width="100%" display="flex" flexDirection="column" flexShrink={0}>
-        <Text bold color="white" wrap="truncate">
+        <Text bold color="#00ff41" wrap="truncate">
           NERVE
         </Text>
       </Box>
@@ -43,7 +43,7 @@ export function StatusFooter({ width, cwd, modelLabel }: StatusFooterProps) {
         </Text>
       </Box>
       <Box width="100%" display="flex" flexDirection="column" flexShrink={0}>
-        <Text color="yellow" wrap="truncate">
+        <Text color="#ffcc00" wrap="truncate">
           {modelLabel}
         </Text>
       </Box>

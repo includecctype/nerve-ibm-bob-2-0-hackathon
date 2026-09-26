@@ -87,7 +87,7 @@ export function LogoView({
         justifyContent="center"
         alignItems="center"
       >
-        <Text color="cyan">{BANNER}</Text>
+        <Text color="#00ff41">{BANNER}</Text>
         {questionnaireActive ? (
           <Box width="100%" display="flex" flexDirection="column" alignItems="center">
             <QuestionnaireBox
