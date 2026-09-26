@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { InkXterm } from "ink-web/core";
 import { FileExplorer } from "./file_explorer/file_explorer.js";
 import { FileViewer } from "./file_viewer/file_viewer.js";
 import { useSessionFolder } from "./storage/storage_store.js";
 import { App } from "./terminal/app.js";
+import { InkXterm } from "./terminal/xterm_host.js";
 import "@xterm/xterm/css/xterm.css";
 import "./styles/ide_shell.css";
 
