@@ -1,5 +1,5 @@
 import { Box, Text, render, useApp, useInput } from "ink";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { KeyPrompt } from "./command/key_prompt.js";
 import { ModelPicker } from "./command/model_picker.js";
 import { QuestionnaireBox } from "./command/questionnaire_box.js";
@@ -80,6 +80,7 @@ function App() {
   const [error_msg, setErrorMsg] = useState<string | null>(null);
   const [overlay, setOverlay] = useState<OverlayState | null>(null);
   const [model_id, setModelId] = useState(getUserData().main_agent_id);
+  const questions_ref = useRef<StructuredQuestionDTO[]>([]);
 
   // ── Socket wiring ─────────────────────────────────────────────────────
   const startSocket = useCallback(() => {
@@ -105,7 +106,19 @@ function App() {
       onSubagentResponse: () => {
         // display-only progress; never forwarded to the main agent
       },
-      onQuestionnaire: (qs) => setQuestions(qs),
+      onQuestionnaire: (qs) => {
+        // A duplicate emit of the same questions must not reset the write-in box.
+        const prev = questions_ref.current;
+        if (
+          prev.length > 0 &&
+          prev.length === qs.length &&
+          JSON.stringify(prev) === JSON.stringify(qs)
+        ) {
+          return;
+        }
+        questions_ref.current = qs;
+        setQuestions(qs);
+      },
       onAgentError: (message) => {
         setErrorMsg(message);
         emitAgentErrorResponse(message);
@@ -374,9 +387,9 @@ function App() {
       {/* Questionnaire overlay */}
       {questions && (
         <QuestionnaireBox
+          key={JSON.stringify(questions)}
           questions={questions}
           onComplete={handleQuestionnaireComplete}
-          onCancel={() => setQuestions(null)}
         />
       )}
 

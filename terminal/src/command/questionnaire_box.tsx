@@ -4,15 +4,20 @@ import React from "react";
 import type { QuestionnaireAnswerDTO, StructuredQuestionDTO } from "../dto/wire.js";
 import { theme } from "../ui/theme.js";
 
-const OTHER_PATTERN = /other|custom|none of the above|something else/i;
+// Model-supplied options that mean "let me type my own answer" are routed to
+// the write-in box instead of being answered literally. Anchored so an option
+// that merely contains e.g. "other" is never dropped.
+const OTHER_PATTERN =
+  /^(other|others|other option|none of the above|none of these|something else|custom|my own answer)$/i;
 
 export function isOtherLikeOption(option: string): boolean {
-  return OTHER_PATTERN.test(option);
+  return OTHER_PATTERN.test(option.trim());
 }
 
 export function buildQuestionOptions(options: string[]): Array<{ label: string; value: string }> {
   const items = options
-    .filter((option) => !isOtherLikeOption(option))
+    .map((option) => option.trim())
+    .filter((option) => option.length > 0 && !isOtherLikeOption(option))
     .map((option) => ({ label: option, value: option }));
   items.push({ label: "Other (write-in)", value: "__other__" });
   return items;
@@ -21,10 +26,9 @@ export function buildQuestionOptions(options: string[]): Array<{ label: string; 
 interface QuestionnaireBoxProps {
   questions: StructuredQuestionDTO[];
   onComplete: (answers: QuestionnaireAnswerDTO[]) => void;
-  onCancel: () => void;
 }
 
-export function QuestionnaireBox({ questions, onComplete, onCancel }: QuestionnaireBoxProps) {
+export function QuestionnaireBox({ questions, onComplete }: QuestionnaireBoxProps) {
   const [index, setIndex] = React.useState(0);
   const [answers, setAnswers] = React.useState<QuestionnaireAnswerDTO[]>([]);
   const [write_in, setWriteIn] = React.useState("");
@@ -32,16 +36,14 @@ export function QuestionnaireBox({ questions, onComplete, onCancel }: Questionna
 
   const current = questions[index];
 
-  // Owns every key while a questionnaire is on screen: Esc cancels the
-  // question, and the write-in box collects free text.
+  // While the option list is shown the Select widget owns the keys. Esc is
+  // scoped to the write-in box: it leaves the box without discarding the
+  // questionnaire.
   useInput((input, key) => {
     const active = questions[index];
     if (!active) return;
 
-    if (!in_write_in) {
-      if (key.escape) onCancel();
-      return;
-    }
+    if (!in_write_in) return;
 
     if (key.escape) {
       setInWriteIn(false);
