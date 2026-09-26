@@ -1,0 +1,57 @@
+.ide-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #0b0f14;
+}
+
+.ide-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #1c2633;
+}
+
+.ide-brand {
+  font-weight: 700;
+  color: #7ee787;
+  letter-spacing: 1px;
+}
+
+.ide-session {
+  color: #8b98a9;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ide-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1.15fr 0.6fr 0.95fr;
+  min-height: 0;
+}
+
+.ide-pane {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ide-terminal {
+  display: flex;
+}
+
+.ide-terminal > div {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .ide-body {
+    grid-template-columns: 1fr;
+    grid-template-rows: 2fr 1fr 1fr;
+  }
+}
