@@ -2,31 +2,27 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Self
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
 
 
-def elapsedMsSince(start: float) -> int:
-    """Return elapsed milliseconds since a time.monotonic() snapshot."""
-    return int((time.monotonic() - start) * 1000)
+def logStep(name: str, elapsed_ms: float) -> None:
+    """Log a [timing] line at info level."""
+    logger.info("[timing] %s: %.0fms", name, elapsed_ms)
 
 
-def logStep(label: str, start: float) -> None:
-    """Log a [timing] line with elapsed ms since start."""
-    logger.info("[timing] %s: %dms", label, elapsedMsSince(start))
+def elapsedMsSince(started_at: float) -> float:
+    """Return elapsed milliseconds since a time.perf_counter() snapshot."""
+    return (time.perf_counter() - started_at) * 1000.0
 
 
-class timedStep:
-    """Context manager that logs elapsed time for a named step."""
-
-    def __init__(self, label: str) -> None:
-        self._label = label
-        self._start = 0.0
-
-    def __enter__(self) -> Self:
-        self._start = time.monotonic()
-        return self
-
-    def __exit__(self, *_: object) -> None:
-        logStep(self._label, self._start)
+@asynccontextmanager
+async def timedStep(name: str) -> AsyncIterator[None]:
+    """Async context manager that logs elapsed time for a named step."""
+    started_at = time.perf_counter()
+    try:
+        yield
+    finally:
+        logStep(name, elapsedMsSince(started_at))

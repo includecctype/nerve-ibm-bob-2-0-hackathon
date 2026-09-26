@@ -6,7 +6,7 @@ import time
 from ai_tool.task.emit.task import updateTaskDisplay
 from gateway.agent.with_task_context import withTaskContext
 from gateway.config import connected_users, sio
-from gateway.observability.timing import logStep
+from gateway.observability.timing import elapsedMsSince, logStep, timedStep
 from gateway.retry.agent_error import emitAgentError, resetErrorBounce
 from gateway.retry.rate_limit import callWithRateLimitRetry
 from gateway.state.session_locks import (
@@ -34,7 +34,7 @@ async def invokeMainAgent(sid: str, system_prompt: str, user_message: str) -> No
         return
 
     await acquirePromptLock(sid)
-    turn_start = time.monotonic()
+    total_started_at = time.perf_counter()
     try:
 
         async def _call():
@@ -44,17 +44,17 @@ async def invokeMainAgent(sid: str, system_prompt: str, user_message: str) -> No
                 mem.history,
             )
 
-        result = await callWithRateLimitRetry(_call, timeout=AGENT_TURN_TIMEOUT_SECONDS)
-        logStep("agent_turn", turn_start)
+        async with timedStep(f"invokeMainAgent_run sid={sid}"):
+            result = await callWithRateLimitRetry(_call, timeout=AGENT_TURN_TIMEOUT_SECONDS)
 
         response_text = lastTextFromResult(result)
         resetErrorBounce(sid)
         await updateTaskDisplay(sid, connected_users)
         if response_text.strip():
             await sio.emit("main_agent_response", response_text, to=sid)
+        logStep(f"invokeMainAgent_total sid={sid}", elapsedMsSince(total_started_at))
 
     except Exception as exc:
-        logStep("agent_turn_failed", turn_start)
         logger.exception("[agent] turn failed for sid=%s", sid)
         # The CLI owns the bounce counter: emit the error and let its
         # agent_error_response drive the give-up loop.
