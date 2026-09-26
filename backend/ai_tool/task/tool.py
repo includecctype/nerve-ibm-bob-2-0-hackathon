@@ -13,6 +13,7 @@ from ai_tool.task.task_graph import (
     makeCategory,
     normalizeName,
     repairGraph,
+    truncateResult,
     validateCategoryInput,
     validateGraph,
 )
@@ -113,7 +114,7 @@ def makeTaskTools(
         released_prompt = False
         try:
             released_prompt = await release_prompt_fn(sid)
-            summary = await runTaskGraph(
+            stats = await runTaskGraph(
                 sid=sid,
                 connected_users=connected_users,
                 create_sub_agent_fn=create_sub_agent_fn,
@@ -125,14 +126,37 @@ def makeTaskTools(
             if released_prompt:
                 await reacquire_prompt_fn(sid)
 
-        parts = [
-            "Execution complete.",
-            f"Done: {summary['done']}, Failed: {summary['failed']}, Blocked: {summary['blocked']}",
-        ]
-        if summary.get("excerpts"):
-            parts.append("Excerpts:")
-            parts.extend(summary["excerpts"])
-        return "\n".join(parts)
+        parts: list[str] = []
+        if stats["done"]:
+            parts.append(f"completed: {', '.join(stats['done'])}")
+        if stats["failed"]:
+            parts.append(f"failed: {', '.join(stats['failed'])}")
+        if stats["blocked"]:
+            parts.append(f"blocked by failures: {', '.join(stats['blocked'])}")
+        summary = "; ".join(parts) if parts else "no categories ran"
+
+        # Result excerpts: reports never reach the main agent any other way, and
+        # only this pass's categories are reported.
+        detail_lines: list[str] = []
+        completed_lookup = {normalizeName(known.name): known for known in user.completed_categories}
+        for name in [*stats["done"], *stats["failed"]]:
+            known = completed_lookup.get(normalizeName(name))
+            if known is None:
+                continue
+            results = [truncateResult(task.result) for task in known.tasks if task.result]
+            detail = "; ".join(results) if results else "(no result captured)"
+            detail_lines.append(f"- {name}: {detail}")
+        details = "\n".join(detail_lines)
+
+        remaining = len(user.pending_categories)
+        if remaining:
+            outcome = f"{remaining} pending categor(ies) remain — call executeCurrentTask again."
+        else:
+            outcome = "No pending remain — summarize these results to the user."
+        body = f"Execution pass finished ({summary})."
+        if details:
+            body += f"\nCategory results:\n{details}"
+        return f"{body} {outcome}"
 
     @tool
     async def checkRunningTasks() -> str:

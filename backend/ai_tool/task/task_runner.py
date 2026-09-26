@@ -10,9 +10,9 @@ from ai_tool.task.task_graph import (
     buildStatusMap,
     cascadeBlocked,
     readyCategories,
-    truncateResult,
 )
 from ai_tool.task.task_models import TaskCategory
+from gateway.retry.agent_error import emitAgentError
 from model.agent_session import lastTextFromResult
 
 logger = logging.getLogger(__name__)
@@ -67,6 +67,7 @@ async def runCategory(
             item.result = content
             item.status = "done"
             await updateTaskDisplay(sid, connected_users)
+            await subAgentResponse(sid, category.name, "done", content)
         except Exception as exc:  # noqa: BLE001
             logger.error("Task failed in category '%s': %s", category.name, exc)
             item.status = "failed"
@@ -74,14 +75,13 @@ async def runCategory(
             for remaining in category.tasks[index + 1 :]:
                 remaining.status = "failed"
             category.status = "failed"
+            await emitAgentError(sid, f"Sub-agent model failed after retries: {exc}")
             await updateTaskDisplay(sid, connected_users)
             await subAgentResponse(sid, category.name, "failed", str(exc))
             return
 
     category.status = "done"
     await updateTaskDisplay(sid, connected_users)
-    report = truncateResult(category.tasks[-1].result) if category.tasks else ""
-    await subAgentResponse(sid, category.name, "done", report)
 
 
 async def runTaskGraph(
@@ -90,17 +90,18 @@ async def runTaskGraph(
     create_sub_agent_fn,
     call_with_retry_fn,
     subagent_timeout: int,
-) -> dict:
+) -> dict[str, list[str]]:
     """
     Event-driven DAG scheduler.
     Loop: cascadeBlocked → readyCategories → create_task per ready → wait(FIRST_COMPLETED) → drain.
-    Returns summary counts.
+    Returns per-pass stats: category names that are done / failed / blocked.
     """
     user = connected_users.get(sid)
     if user is None:
-        return {"done": 0, "failed": 0, "blocked": 0}
+        return {"done": [], "failed": [], "blocked": []}
 
     running_tasks: dict[asyncio.Task, TaskCategory] = {}
+    stats: dict[str, list[str]] = {"done": [], "failed": [], "blocked": []}
 
     while True:
         status_map = buildStatusMap(
@@ -110,9 +111,10 @@ async def runTaskGraph(
         )
 
         newly_blocked, user.pending_categories = cascadeBlocked(user.pending_categories, status_map)
-        for cat in newly_blocked:
-            user.completed_categories.append(cat)
         if newly_blocked:
+            for cat in newly_blocked:
+                stats["blocked"].append(cat.name)
+                user.completed_categories.append(cat)
             status_map = buildStatusMap(
                 user.pending_categories,
                 user.running_categories,
@@ -160,31 +162,26 @@ async def runTaskGraph(
 
         for finished_task in done:
             cat = running_tasks.pop(finished_task)
-            failure = finished_task.exception()
-            if failure is not None:
+            crashed = finished_task.cancelled() or finished_task.exception() is not None
+            if crashed and cat.status == "running":
+                # Unexpected runCategory crash: fail instead of hanging the graph.
                 cat.status = "failed"
-                logger.error(
-                    "Category '%s' crashed before completing: %s",
-                    cat.name,
-                    failure,
-                    exc_info=(type(failure), failure, failure.__traceback__),
-                )
+                for item in cat.tasks:
+                    if item.status in ("pending", "running"):
+                        item.status = "failed"
+                if isinstance(finished_task, asyncio.Task) and not finished_task.cancelled():
+                    exc = finished_task.exception()
+                    logger.error(
+                        "Category '%s' crashed before completing: %s",
+                        cat.name,
+                        exc,
+                        exc_info=(type(exc), exc, exc.__traceback__) if exc else None,
+                    )
             user.running_categories.remove(cat)
             user.completed_categories.append(cat)
+            if cat.status in ("done", "failed"):
+                stats[cat.status].append(cat.name)
 
-    # Count outcomes
-    done_count = sum(1 for c in user.completed_categories if c.status == "done")
-    failed_count = sum(1 for c in user.completed_categories if c.status == "failed")
-    blocked_count = sum(1 for c in user.completed_categories if c.status == "blocked")
-
-    excerpts = []
-    for c in user.completed_categories:
-        if c.status == "done" and c.tasks:
-            excerpts.append(f"[{c.name}] {truncateResult(c.tasks[-1].result)}")
-
-    return {
-        "done": done_count,
-        "failed": failed_count,
-        "blocked": blocked_count,
-        "excerpts": excerpts,
-    }
+    # Result excerpts are built by the caller from these stats, so results are
+    # reported only for the categories that ran in this pass.
+    return stats
