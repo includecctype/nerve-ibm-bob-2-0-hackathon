@@ -11,6 +11,7 @@ from ai_tool.task.task_graph import (
     buildStatusMap,
     cascadeBlocked,
     makeCategory,
+    normalizeName,
     repairGraph,
     validateCategoryInput,
     validateGraph,
@@ -49,30 +50,37 @@ def makeTaskTools(
         except json.JSONDecodeError as e:
             return f"Error: invalid JSON — {e}"
 
-        validated = validateCategoryInput(raw)
+        validated, error = validateCategoryInput(raw)
+        if error:
+            return error
         if not validated:
             return "Error: no valid categories in input"
 
-        repaired, notes = repairGraph(validated, user.running_categories, user.pending_categories)
+        repaired, notes = repairGraph(validated, user.running_categories, user.completed_categories)
         is_valid, err = validateGraph(repaired, user.running_categories, user.completed_categories)
         if not is_valid:
             return f"Error: {err}"
+
+        # A re-added category is being morphed, so drop its stale completed copy:
+        # otherwise it would live in both pending and completed and be counted twice.
+        incoming_names = {normalizeName(item["name"]) for item in repaired}
+        completed = [
+            category
+            for category in user.completed_categories
+            if normalizeName(category.name) not in incoming_names
+        ]
 
         new_cats = [
             makeCategory(item["name"], item["tasks"], item.get("depends_on", []))
             for item in repaired
         ]
+        pending = mergeCategoryLists(user.pending_categories, new_cats)
 
-        user.pending_categories = mergeCategoryLists(user.pending_categories, new_cats)
+        status_map = buildStatusMap(pending, user.running_categories, completed)
+        newly_blocked, pending = cascadeBlocked(pending, status_map)
 
-        status_map = buildStatusMap(
-            user.pending_categories,
-            user.running_categories,
-            user.completed_categories,
-        )
-        newly_blocked, user.pending_categories = cascadeBlocked(user.pending_categories, status_map)
-        for cat in newly_blocked:
-            user.completed_categories.append(cat)
+        user.completed_categories = completed + newly_blocked
+        user.pending_categories = pending
 
         await updateTaskDisplay(sid, connected_users)
 
