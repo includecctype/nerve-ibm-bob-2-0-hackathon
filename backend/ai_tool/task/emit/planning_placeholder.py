@@ -6,7 +6,9 @@ PLANNING_DESCRIPTION = "Planning your request…"
 
 
 def isPlaceholderDescription(description: str) -> bool:
-    return description == PLANNING_DESCRIPTION
+    normalized = " ".join(description.strip().lower().split())
+    expected = " ".join(PLANNING_DESCRIPTION.strip().lower().split())
+    return normalized == expected
 
 
 async def emitPlanningPlaceholder(sid: str, real_categories: list[TaskCategory]) -> None:
