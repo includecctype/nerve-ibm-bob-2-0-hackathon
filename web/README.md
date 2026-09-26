@@ -13,7 +13,7 @@ terminal in the DOM), alongside an OCI-backed file explorer and a file viewer:
 ## How it works
 
 - **`src/terminal/`** — the Ink app, ported from `terminal/`. Config and sessions
-  live in `localStorage`; the backend URL comes from `VITE_NERVE_BACKEND_URL`.
+  live in `localStorage`; the backend URL comes from `NERVE_BACKEND_URL`.
   The client connects with `client_kind: "web"`.
 - **`src/storage/`** — a typed Socket.IO client for the storage events
   (`storage_session`/`storage_listing`/`storage_content`/`storage_change`) plus
@@ -30,10 +30,10 @@ explorer in realtime. The browser never holds OCI secrets.
 
 ```bash
 pnpm install
-VITE_NERVE_BACKEND_URL=http://localhost:8000 pnpm dev
+NERVE_BACKEND_URL=http://localhost:8000 pnpm dev
 ```
 
-Without `VITE_NERVE_BACKEND_URL` the app connects to the public deployment. The
+Without `NERVE_BACKEND_URL` the app connects to `http://localhost:8000`. The
 backend needs `OCI_NAMESPACE` + `OCI_BUCKET` and an OCI API-key config (see the
 root README); without them the terminal still works and the file panes show an
 error.
@@ -42,10 +42,11 @@ error.
 
 | Variable | Purpose |
 |---|---|
-| `VITE_NERVE_BACKEND_URL` | gateway URL baked into the build (defaults to the public deployment) |
+| `NERVE_BACKEND_URL` | gateway URL baked into the build (defaults to `http://localhost:8000`) |
 
 Copy `.env.example` to `.env` (git-ignored) for local development. Nothing here
-is secret — Vite inlines `VITE_*` values into the public bundle.
+is secret — Vite inlines the exposed `NERVE_*` / `VITE_*` values into the public
+bundle.
 
 ## Checks
 
@@ -62,5 +63,5 @@ pnpm build     # → web/dist (relative asset paths)
 Upload `web/dist` to any static host (GitHub Pages, Hostinger, ...). Make sure
 the backend's `WEB_ALLOWED_ORIGINS` includes the deployed origin.
 `.github/workflows/web-pages.yml` automates GitHub Pages: set the
-`VITE_NERVE_BACKEND_URL` repository variable and enable Pages with the "GitHub
+`NERVE_BACKEND_URL` repository variable and enable Pages with the "GitHub
 Actions" source.

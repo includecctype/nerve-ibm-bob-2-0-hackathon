@@ -2,7 +2,9 @@ import { type Socket, io } from "socket.io-client";
 import { getUserData } from "../session/user_data.js";
 
 const NERVE_BACKEND_URL =
-  import.meta.env.VITE_NERVE_BACKEND_URL ?? "https://nerve-boq5.onrender.com";
+  import.meta.env.NERVE_BACKEND_URL ??
+  import.meta.env.VITE_NERVE_BACKEND_URL ??
+  "http://localhost:8000";
 
 let socket_instance: Socket | null = null;
 const socket_observers = new Set<(socket: Socket) => void>();
