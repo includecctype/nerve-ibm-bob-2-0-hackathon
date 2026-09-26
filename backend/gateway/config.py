@@ -37,6 +37,8 @@ class ConnectedUserMemory(BaseModel):
     completed_categories: list[Any] = Field(default_factory=list)
     history: list[dict] = Field(default_factory=list)
     last_user_request: str = ""
+    client_kind: str = "cli"
+    storage_folder: str | None = None
 
 
 connected_users: dict[str, ConnectedUserMemory] = {}

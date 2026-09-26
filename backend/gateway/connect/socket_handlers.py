@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from ai_tool.delegation.pending_requests.pending_requests import (
@@ -19,6 +20,8 @@ from gateway.prompt.user_prompt import USER_PROMPT_SYSTEM
 from gateway.retry.agent_error import clearErrorState, resetErrorBounce
 from gateway.state.runtime_state import exec_locks, sid_locks
 from model.main_agent import createMainAgent
+from storage.oci.session_folder import makeSessionFolder
+from storage.service import storage_service
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +59,18 @@ async def connect(sid: str, environ: dict, auth: dict | None) -> None:
 
         history: list[dict] = auth.get("history") or []
 
+        # Web clients get a fresh object-storage folder per visit; the CLI works
+        # against the local machine instead and gets no folder.
+        client_kind = str(auth.get("client_kind", "cli"))
+        storage_folder = makeSessionFolder() if client_kind == "web" else None
+        if storage_folder is not None:
+            try:
+                await asyncio.to_thread(
+                    storage_service.ensureSession, storage_folder, main_agent_id
+                )
+            except Exception:  # storage is best-effort at connect time
+                logger.exception("[connect] could not create the storage folder for sid=%s", sid)
+
         agent_session = createMainAgent(main_agent_id, api_key, getMainAgentTools(sid))
 
         connected_users[sid] = ConnectedUserMemory(
@@ -65,14 +80,19 @@ async def connect(sid: str, environ: dict, auth: dict | None) -> None:
             running_categories=[],
             completed_categories=completed,
             history=history,
+            client_kind=client_kind,
+            storage_folder=storage_folder,
         )
 
         # Publish the normalised graph (running downgraded to pending) so a
         # reconnecting client renders the restored state instead of stale statuses.
         await updateTaskDisplay(sid, connected_users)
 
+        if storage_folder is not None:
+            await sio.emit("storage_session", {"folder": storage_folder}, to=sid)
+
         await sio.emit("connection_status", True, to=sid)
-        logger.info("[connect] sid=%s agent_id=%d", sid, main_agent_id)
+        logger.info("[connect] sid=%s agent_id=%d kind=%s", sid, main_agent_id, client_kind)
 
     except Exception:
         logger.exception("[connect] error for sid=%s", sid)
