@@ -15,13 +15,17 @@
     "format:check": "biome format src"
   },
   "dependencies": {
+    "@inkjs/ui": "^2.0.0",
     "@xterm/xterm": "^5.5.0",
     "ink": "^6.8.0",
+    "ink-big-text": "^2.0.0",
     "ink-web": "^0.2.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-reconciler": "^0.33.0",
-    "scheduler": "^0.27.0"
+    "scheduler": "^0.27.0",
+    "socket.io-client": "^4.8.0",
+    "wrap-ansi": "^9.0.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.0",
