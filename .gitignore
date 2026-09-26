@@ -1,4 +1,6 @@
 .env
+.env.local
+.env.*.local
 __pycache__/
 *.py[cod]
 .venv/
@@ -7,6 +9,13 @@ dist/
 build/
 *.egg-info/
 .pytest_cache/
+.mypy_cache/
 .ruff_cache/
+*.tsbuildinfo
 node_modules/
 user_config/
+*.pem
+*.db
+*.sqlite3
+docker-compose.override.yml
+.DS_Store
