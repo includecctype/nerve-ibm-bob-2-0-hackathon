@@ -45,6 +45,9 @@ WEB_SEARCH_API=<your-exa-key> uv run main.py
 
 The gateway is a pure Socket.IO ASGI app: it exposes **no HTTP routes**, so a
 `GET /` healthcheck does not apply (the Docker healthcheck opens a TCP socket).
+Browser origins allowed to connect are controlled by `WEB_ALLOWED_ORIGINS`
+(comma-separated); when unset any origin is accepted, which suits the CLI and the
+web demo.
 
 ### 2. CLI
 
@@ -127,8 +130,9 @@ Ambiguous prompts come back as a **questionnaire**: 2–5 options plus a write-i
 |---|---|---|
 | `WEB_SEARCH_API` | backend (`backend/systemconfig/websearch.py`) | Exa key for `webSearch` / `webFetch` |
 | `NERVE_BACKEND_URL` | CLI (`terminal/src/socket/client.ts`) | gateway URL; defaults to the public deployment |
+| `WEB_ALLOWED_ORIGINS` | backend (`backend/gateway/config.py`) | comma-separated browser origins allowed to connect; defaults to any (`*`) |
 
-`.env` is git-ignored; `.env.example` lists the two keys with blank values.
+`.env` is git-ignored; `.env.example` lists the keys with blank values.
 
 ## Checks
 
