@@ -79,7 +79,10 @@ async def user_prompt(sid: str, data: str) -> None:
     resetErrorBounce(sid)
     mem.last_user_request = str(data)
 
-    await emitPlanningPlaceholder(sid)
+    emitPlanningPlaceholder(
+        sid,
+        mem.pending_categories + mem.running_categories + mem.completed_categories,
+    )
 
     asyncio.create_task(invokeMainAgent(sid, USER_PROMPT_SYSTEM, str(data)))
 
