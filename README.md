@@ -151,7 +151,7 @@ cd backend && uv sync --all-extras && uv run main.py
 
 # web workspace
 cd web && pnpm install
-VITE_NERVE_BACKEND_URL=http://localhost:8000 pnpm dev
+NERVE_BACKEND_URL=http://localhost:8000 pnpm dev
 ```
 
 ### OCI setup
@@ -176,7 +176,7 @@ cd web && pnpm build     # → web/dist (relative asset paths)
 Upload `web/dist` to any static host (GitHub Pages, Hostinger, ...). The backend
 must be reachable, and its `WEB_ALLOWED_ORIGINS` should include the web origin.
 `.github/workflows/web-pages.yml` deploys `web/dist` to GitHub Pages on pushes
-that touch `web/`; set the `VITE_NERVE_BACKEND_URL` repository variable and
+that touch `web/`; set the `NERVE_BACKEND_URL` repository variable and
 enable Pages with the "GitHub Actions" source first.
 
 ## Environment variables
@@ -184,14 +184,13 @@ enable Pages with the "GitHub Actions" source first.
 | Variable | Read by | Purpose |
 |---|---|---|
 | `WEB_SEARCH_API` | backend (`backend/systemconfig/websearch.py`) | Exa key for `webSearch` / `webFetch` |
-| `NERVE_BACKEND_URL` | CLI (`terminal/src/socket/client.ts`) | gateway URL; defaults to the public deployment |
+| `NERVE_BACKEND_URL` | CLI (`terminal/src/socket/client.ts`) and web (`web/src/terminal/socket/client.ts`) | gateway URL; the CLI defaults to the public deployment, the web build to `http://localhost:8000` |
 | `WEB_ALLOWED_ORIGINS` | backend (`backend/gateway/config.py`) | comma-separated browser origins allowed to connect; defaults to any (`*`) |
 | `OCI_TENANCY` / `OCI_USER` / `OCI_FINGERPRINT` / `OCI_REGION` | backend (`backend/storage/oci/oci_client.py`) | OCI API-key identity and region |
 | `OCI_KEY_FILE` / `OCI_KEY_CONTENT` | backend (`backend/storage/oci/oci_client.py`) | private key: a mounted PEM path, or inline PEM with `\n` escapes |
 | `OCI_PRIVATE_KEY_PASSPHRASE` | backend (`backend/storage/oci/oci_client.py`) | passphrase for an encrypted private key (optional) |
 | `OCI_NAMESPACE` | backend (`backend/storage/oci/oci_client.py`) | Object Storage namespace |
 | `OCI_BUCKET` | backend (`backend/storage/oci/oci_client.py`) | bucket that holds the web session folders |
-| `VITE_NERVE_BACKEND_URL` | web (`web/src/terminal/socket/client.ts`) | gateway URL baked into the browser build; defaults to the public deployment |
 
 `.env` and `web/.env` are git-ignored; `.env.example` and `web/.env.example`
 list the keys with blank values. OCI credentials are read entirely from the

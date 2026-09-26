@@ -11,6 +11,7 @@ const utilShim = fileURLToPath(new URL("./src/shims/util.ts", import.meta.url));
 
 export default defineConfig({
   base: "./",
+  envPrefix: ["VITE_", "NERVE_"],
   plugins: [react(), inkWebPlugin()],
   resolve: {
     alias: {
