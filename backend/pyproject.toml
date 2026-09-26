@@ -16,6 +16,7 @@ dependencies = [
     "httpx",
     "exa-py",
     "pydantic",
+    "oci",
 ]
 
 [project.optional-dependencies]

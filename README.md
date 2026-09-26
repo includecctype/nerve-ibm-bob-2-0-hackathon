@@ -131,8 +131,14 @@ Ambiguous prompts come back as a **questionnaire**: 2–5 options plus a write-i
 | `WEB_SEARCH_API` | backend (`backend/systemconfig/websearch.py`) | Exa key for `webSearch` / `webFetch` |
 | `NERVE_BACKEND_URL` | CLI (`terminal/src/socket/client.ts`) | gateway URL; defaults to the public deployment |
 | `WEB_ALLOWED_ORIGINS` | backend (`backend/gateway/config.py`) | comma-separated browser origins allowed to connect; defaults to any (`*`) |
+| `OCI_NAMESPACE` | backend (`backend/storage/oci/oci_client.py`) | Object Storage namespace |
+| `OCI_BUCKET` | backend (`backend/storage/oci/oci_client.py`) | bucket that holds the web session folders |
+| `OCI_CONFIG_FILE` | backend (`backend/storage/oci/oci_client.py`) | OCI API-key config path; defaults to `~/.oci/config` |
+| `OCI_CONFIG_PROFILE` | backend (`backend/storage/oci/oci_client.py`) | OCI config profile; defaults to `DEFAULT` |
 
-`.env` is git-ignored; `.env.example` lists the keys with blank values.
+`.env` is git-ignored; `.env.example` lists the keys with blank values. OCI
+region and API keys are read from `~/.oci/config`, so only the namespace and
+bucket need to be set.
 
 ## Checks
 
