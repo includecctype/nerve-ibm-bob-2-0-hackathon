@@ -11,7 +11,7 @@ import type {
   TaskCategoryDTO,
   TaskUpdatePayload,
 } from "./dto/wire.js";
-import { splitInputChunk, useBracketedPaste } from "./hooks/use_bracketed_paste.js";
+import { useBracketedPaste } from "./hooks/use_bracketed_paste.js";
 import { useLayout } from "./hooks/use_layout.js";
 import { isMouseEvent, parseWheelEvent, useMouseTracking } from "./hooks/use_mouse_wheel.js";
 import { ensureConfigFile, readConfig, readSessionData } from "./save/config_reader.js";
@@ -32,6 +32,7 @@ import { LogoView } from "./ui/logo_view.js";
 import { PromptBox } from "./ui/prompt_box.js";
 import { StatusFooter } from "./ui/status_footer.js";
 import { TaskPane } from "./ui/task_pane.js";
+import { theme } from "./ui/theme.js";
 
 // ── Bootstrap ──────────────────────────────────────────────────────────────
 ensureConfigFile();
@@ -64,7 +65,7 @@ function buildSessionEntries(): SessionEntry[] {
 function App() {
   const { exit } = useApp();
   const layout = useLayout();
-  const sanitize = useBracketedPaste();
+  useBracketedPaste();
   useMouseTracking();
 
   const [connected, setConnected] = useState(false);
@@ -278,7 +279,27 @@ function App() {
   // to the bottom, so new messages appear without touching the scroll state.
   const max_chat_scroll = Math.max(displays.length - layout.chat_height, 0);
 
+  const handleInputChange = (value: string) => {
+    setInputValue(value);
+    setCommandMode(value.startsWith("/"));
+  };
+
+  const handlePromptSubmit = (raw: string) => {
+    const full = raw.trim();
+    if (full) {
+      if (full.startsWith("/")) {
+        void handleCommand(full);
+      } else {
+        handleSubmit(full);
+      }
+    }
+    setInputValue("");
+    setCommandMode(false);
+  };
+
   // ── Keyboard ──────────────────────────────────────────────────────────
+  // Text editing and submission live in PromptBox; this handler owns only the
+  // global shortcuts (scrolling, Escape) so the two do not fight over keys.
   useInput((input, key) => {
     // Overlays and the questionnaire own the keyboard while they are open.
     if (overlay || questions) return;
@@ -298,44 +319,9 @@ function App() {
     }
     if (isMouseEvent(input)) return;
 
-    const { text, submitted } = splitInputChunk(input);
-    const chunk = sanitize(text);
-
-    // Command mode toggle
-    if (chunk === "/" && input_value === "" && !command_mode) {
-      setCommandMode(true);
-      setInputValue("/");
-      return;
-    }
-
     if (key.escape) {
       setCommandMode(false);
       setInputValue("");
-      return;
-    }
-
-    if (key.return || submitted) {
-      const full = `${input_value}${chunk}`.trim();
-      const command_name = full.split(/\s+/)[0];
-      // Command mode, a whole command pasted into an empty prompt, or a pasted
-      // command that is already sitting in the prompt when Enter arrives as its
-      // own chunk (paste no longer ends with a submit, so input_value is set).
-      if (
-        command_mode ||
-        (input_value === "" && full.startsWith("/")) ||
-        VALID_COMMANDS.includes(command_name)
-      ) {
-        void handleCommand(full);
-      } else {
-        handleSubmit(full);
-      }
-      setInputValue("");
-      setCommandMode(false);
-      return;
-    }
-
-    if (key.backspace || key.delete) {
-      setInputValue((value) => value.slice(0, -1));
       return;
     }
 
@@ -367,6 +353,8 @@ function App() {
       return;
     }
 
+    // Up/Down move the prompt cursor when the draft is multi-line; otherwise
+    // they scroll the chat.
     const prompt_is_multiline = input_value.includes("\n");
     if (!prompt_is_multiline && key.upArrow) {
       setChatScroll((value) => Math.min(max_chat_scroll, value + 1));
@@ -375,10 +363,6 @@ function App() {
     if (!prompt_is_multiline && key.downArrow) {
       setChatScroll((value) => Math.max(0, value - 1));
       return;
-    }
-
-    if (!key.ctrl && !key.meta && chunk) {
-      setInputValue((value) => value + chunk);
     }
   });
 
@@ -432,7 +416,16 @@ function App() {
       {!overlay && command_mode && <CommandOverlay input={input_value} />}
 
       {/* Prompt box */}
-      {!overlay && <PromptBox value={input_value} command_mode={command_mode} />}
+      {!overlay && (
+        <PromptBox
+          value={input_value}
+          onChange={handleInputChange}
+          onSubmit={handlePromptSubmit}
+          width={layout.cols - 2}
+          border_color={command_mode ? theme.warning : theme.primary}
+          placeholder="Type a prompt, / for commands (Esc clears)"
+        />
+      )}
 
       {/* Footer */}
       <StatusFooter model_id={model_id} />

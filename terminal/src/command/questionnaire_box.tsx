@@ -2,7 +2,6 @@ import { Select } from "@inkjs/ui";
 import { Box, Text, useInput } from "ink";
 import React from "react";
 import type { QuestionnaireAnswerDTO, StructuredQuestionDTO } from "../dto/wire.js";
-import { splitInputChunk, useBracketedPaste } from "../hooks/use_bracketed_paste.js";
 import { theme } from "../ui/theme.js";
 
 const OTHER_PATTERN = /other|custom|none of the above|something else/i;
@@ -30,7 +29,6 @@ export function QuestionnaireBox({ questions, onComplete, onCancel }: Questionna
   const [answers, setAnswers] = React.useState<QuestionnaireAnswerDTO[]>([]);
   const [write_in, setWriteIn] = React.useState("");
   const [in_write_in, setInWriteIn] = React.useState(false);
-  const sanitize = useBracketedPaste();
 
   const current = questions[index];
 
@@ -51,11 +49,8 @@ export function QuestionnaireBox({ questions, onComplete, onCancel }: Questionna
       return;
     }
 
-    const { text, submitted } = splitInputChunk(input);
-    const chunk = sanitize(text);
-
-    if (key.return || submitted) {
-      const value = `${write_in}${chunk}`.trim();
+    if (key.return) {
+      const value = write_in.trim();
       setInWriteIn(false);
       setWriteIn("");
       if (!value) return;
@@ -74,6 +69,14 @@ export function QuestionnaireBox({ questions, onComplete, onCancel }: Questionna
       return;
     }
 
+    // Strip control characters and escape sequences; the emitter patch already
+    // removed bracketed-paste markers and normalised CR away.
+    const chunk = [...input]
+      .filter((ch) => {
+        const code = ch.charCodeAt(0);
+        return code >= 32 && code !== 127;
+      })
+      .join("");
     if (!key.ctrl && !key.meta && chunk) {
       setWriteIn((value) => value + chunk);
     }
