@@ -1,15 +1,15 @@
 export const BG_BLACK = "black";
-export const BG_PANEL = "#111111";
+export const BG_PANEL = "#0a140a";
 
 import { isQuestionnaireEntry } from "./display_entry";
 
-const BG_USER = "white";
+const BG_USER = "#003b00";
 
 const ROLE_COLOR: Record<string, string> = {
-  user: "black",
-  assistant: "white",
-  system: "yellow",
-  error: "red",
+  user: "#c8ffd4",
+  assistant: "#00ff41",
+  system: "#ffcc00",
+  error: "#ff3b3b",
 };
 
 export function roleColor(role: string): string {

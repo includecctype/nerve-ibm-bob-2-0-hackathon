@@ -6,6 +6,33 @@ import { App } from "./terminal/app.js";
 import { InkXterm } from "./terminal/xterm_host.js";
 import "@xterm/xterm/css/xterm.css";
 import "./styles/ide_shell.css";
+import type { ITerminalOptions } from "@xterm/xterm";
+
+const TERMINAL_OPTIONS: ITerminalOptions = {
+  theme: {
+    background: "#000000",
+    foreground: "#00ff41",
+    cursor: "#00ff41",
+    cursorAccent: "#000000",
+    selectionBackground: "#003b00",
+    black: "#000000",
+    red: "#ff3b3b",
+    green: "#00ff41",
+    yellow: "#ffcc00",
+    blue: "#00b3ff",
+    magenta: "#ff00ff",
+    cyan: "#00ffcc",
+    white: "#c8ffd4",
+    brightBlack: "#3f8f4f",
+    brightRed: "#ff6b6b",
+    brightGreen: "#66ff99",
+    brightYellow: "#ffe066",
+    brightBlue: "#66ccff",
+    brightMagenta: "#ff66ff",
+    brightCyan: "#66ffe0",
+    brightWhite: "#ffffff",
+  },
+};
 
 export function IdeShell() {
   const folder = useSessionFolder();
@@ -27,7 +54,7 @@ export function IdeShell() {
           <FileViewer path={selected_path} />
         </section>
         <section className="ide-pane ide-terminal" aria-label="Terminal">
-          <InkXterm focus>
+          <InkXterm focus termOptions={TERMINAL_OPTIONS}>
             <App />
           </InkXterm>
         </section>
