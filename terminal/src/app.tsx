@@ -303,8 +303,15 @@ function App() {
 
     if (key.return || submitted) {
       const full = `${input_value}${chunk}`.trim();
-      // Command mode, or a whole command pasted into an empty prompt.
-      if (command_mode || (input_value === "" && full.startsWith("/"))) {
+      const command_name = full.split(/\s+/)[0];
+      // Command mode, a whole command pasted into an empty prompt, or a pasted
+      // command that is already sitting in the prompt when Enter arrives as its
+      // own chunk (paste no longer ends with a submit, so input_value is set).
+      if (
+        command_mode ||
+        (input_value === "" && full.startsWith("/")) ||
+        VALID_COMMANDS.includes(command_name)
+      ) {
         void handleCommand(full);
       } else {
         handleSubmit(full);
