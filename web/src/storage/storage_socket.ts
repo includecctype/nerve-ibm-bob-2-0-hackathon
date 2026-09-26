@@ -30,6 +30,8 @@ const session_listeners = new Set<(folder: string) => void>();
 let session_folder: string | null = null;
 let attached: Socket | null = null;
 
+const REQUEST_TIMEOUT_MS = 30_000;
+
 function settle(request_id: string, resolve: (entry: Pending) => void): void {
   const entry = pending.get(request_id);
   if (!entry) return;
@@ -44,6 +46,9 @@ function attach(socket: Socket): void {
   socket.on("storage_session", (payload: { folder?: string }) => {
     session_folder = payload?.folder ?? null;
     for (const listener of session_listeners) listener(session_folder ?? "");
+    // A (re)connect can land after a pane already tried to load, so nudge every
+    // directory to re-list once the session is available.
+    for (const listener of change_listeners) listener({ op: "refresh", path: "" });
   });
 
   socket.on("storage_listing", (payload: { request_id: string; entries: StorageEntry[] }) => {
@@ -75,17 +80,46 @@ function attach(socket: Socket): void {
 
 function request<T>(event: string, payload: Record<string, unknown>): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    let socket: Socket;
+    const request_id = crypto.randomUUID();
+    const timeout = setTimeout(() => {
+      pending.delete(request_id);
+      reject(new Error(`storage request timed out: ${event}`));
+    }, REQUEST_TIMEOUT_MS);
+
+    pending.set(request_id, {
+      resolve: (value) => {
+        clearTimeout(timeout);
+        (resolve as (value: unknown) => void)(value);
+      },
+      reject: (reason) => {
+        clearTimeout(timeout);
+        reject(reason);
+      },
+    });
+
+    const send = (socket: Socket) => {
+      attach(socket);
+      socket.emit(event, { request_id, ...payload });
+    };
+
+    // Panes mount before the terminal owns a socket, so wait for the first one
+    // instead of failing the request outright.
+    let socket: Socket | null = null;
     try {
       socket = getSocket();
-    } catch (error) {
-      reject(error instanceof Error ? error : new Error(String(error)));
+    } catch {
+      socket = null;
+    }
+    if (socket) {
+      send(socket);
       return;
     }
-    attach(socket);
-    const request_id = crypto.randomUUID();
-    pending.set(request_id, { resolve: resolve as (value: unknown) => void, reject });
-    socket.emit(event, { request_id, ...payload });
+
+    let unsubscribe: (() => void) | null = null;
+    unsubscribe = observeSocket((next) => {
+      unsubscribe?.();
+      send(next);
+    });
   });
 }
 
