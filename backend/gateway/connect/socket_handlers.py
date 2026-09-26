@@ -8,6 +8,7 @@ from ai_tool.delegation.pending_requests.pending_requests import (
     resolveToolResult,
 )
 from ai_tool.task.emit.planning_placeholder import emitPlanningPlaceholder
+from ai_tool.task.emit.task import updateTaskDisplay
 from ai_tool.task.task_graph import buildStatusMap, cascadeBlocked
 from ai_tool.tool_registry import getMainAgentTools
 from gateway.agent.invoke_main_agent import invokeMainAgent
@@ -62,6 +63,10 @@ async def connect(sid: str, environ: dict, auth: dict | None) -> None:
             completed_categories=completed,
             history=history,
         )
+
+        # Publish the normalised graph (running downgraded to pending) so a
+        # reconnecting client renders the restored state instead of stale statuses.
+        await updateTaskDisplay(sid, connected_users)
 
         await sio.emit("connection_status", True, to=sid)
         logger.info("[connect] sid=%s agent_id=%d", sid, main_agent_id)
