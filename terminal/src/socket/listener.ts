@@ -56,7 +56,11 @@ export function registerListeners(socket: Socket, cb: ListenerCallbacks): void {
   socket.on("tool_request", async (req: ToolRequestDTO) => {
     const output = await executeToolRequest(req);
     const ok = !output.startsWith("Error:");
-    emitToolResult({ id: req.id, ok, output });
+    // The connection can drop while the tool runs locally; the backend already
+    // resolves the pending call on disconnect, so there is nobody to answer.
+    if (socket.connected) {
+      emitToolResult({ id: req.id, ok, output });
+    }
   });
 
   socket.on("disconnect", async () => {
