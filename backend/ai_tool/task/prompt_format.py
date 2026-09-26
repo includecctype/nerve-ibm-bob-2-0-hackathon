@@ -77,8 +77,11 @@ def buildTaskPrompt(
     dep_results = ""
     dep_names = {normalizeName(d) for d in category.depends_on}
     for c in completed:
-        if normalizeName(c.name) in dep_names and c.result:
-            dep_results += f"\nResult from '{c.name}':\n{truncateResult(c.result)}"
+        if normalizeName(c.name) not in dep_names or not c.tasks:
+            continue
+        dep_result = c.tasks[-1].result
+        if dep_result:
+            dep_results += f"\nResult from '{c.name}':\n{truncateResult(dep_result)}"
 
     parts = [
         f"Overall goal: {last_user_request}",

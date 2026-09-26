@@ -160,8 +160,15 @@ async def runTaskGraph(
 
         for finished_task in done:
             cat = running_tasks.pop(finished_task)
-            if finished_task.exception():
+            failure = finished_task.exception()
+            if failure is not None:
                 cat.status = "failed"
+                logger.error(
+                    "Category '%s' crashed before completing: %s",
+                    cat.name,
+                    failure,
+                    exc_info=(type(failure), failure, failure.__traceback__),
+                )
             user.running_categories.remove(cat)
             user.completed_categories.append(cat)
 
