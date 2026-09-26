@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { migrateSessionCategories } from "../dto/migrate_session.js";
+import { type LegacySessionData, migrateSessionCategories } from "../dto/migrate_session.js";
 import type { SessionData } from "../dto/wire.js";
 import { defaultConfig } from "../systemconfig/file.js";
 import { MODEL_OPTIONS } from "../systemconfig/model.js";
@@ -40,7 +40,11 @@ export function readConfig(): StoredConfig {
 }
 
 export function readSessionData(config: StoredConfig, session_id: string): SessionData | null {
-  const raw = config.session?.[session_id];
+  const raw = config.session?.[session_id] as LegacySessionData | undefined;
   if (!raw) return null;
-  return migrateSessionCategories(raw as SessionData);
+  return {
+    categories: migrateSessionCategories(raw),
+    history: Array.isArray(raw.history) ? raw.history : [],
+    last_updated: raw.last_updated,
+  };
 }
