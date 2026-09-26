@@ -1,0 +1,43 @@
+{
+	"$schema": "https://opencode.ai/config.json",
+	"mcp": {
+		"obsidian": {
+			"type": "remote",
+			"url": "{env:OBSIDIAN_MCP_URI}",
+			"headers": {
+				"Authorization": "Bearer {env:OBSIDIAN_MCP_KEY}"
+			},
+			"oauth": false,
+			"enabled": true
+		},
+		"libreoffice": {
+			"type": "remote",
+			"url": "{env:LIBREOFFICE_MCP_URI}",
+			"enabled": true
+		},
+		"penpot": {
+			"type": "remote",
+			"url": "{env:PENPOT_MCP_URI}",
+			"headers": {
+				"Authorization": "Bearer {env:PENPOT_MCP_KEY}"
+			},
+			"oauth": false,
+			"enabled": true
+		}
+	},
+	"permission": {
+		"read": { "*": "allow" },
+		"edit": {
+			"*": "allow"
+		},
+		"bash": {
+			"*": "allow"
+		}
+	},
+	"instructions": [
+		".opencode/rules/libreoffice.md",
+		".opencode/rules/obsidian.md",
+		".opencode/rules/structure.md",
+		".opencode/rules/variable.md"
+	]
+}

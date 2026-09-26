@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "obsidian": {
+      "type": "streamable-http",
+      "url": "${env:OBSIDIAN_MCP_URI}",
+      "headers": {
+        "Authorization": "Bearer ${env:OBSIDIAN_MCP_KEY}"
+      },
+      "disabled": false
+    },
+    "libreoffice": {
+      "type": "streamable-http",
+      "url": "${env:LIBREOFFICE_MCP_URI}",
+      "disabled": false
+    },
+    "penpot": {
+      "type": "streamable-http",
+      "url": "${env:PENPOT_MCP_URI}",
+      "headers": {
+        "Authorization": "Bearer ${env:PENPOT_MCP_KEY}"
+      },
+      "disabled": false
+    }
+  }
+}
