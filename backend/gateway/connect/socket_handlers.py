@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 
 from ai_tool.delegation.pending_requests.pending_requests import (
@@ -27,8 +26,13 @@ logger = logging.getLogger(__name__)
 @sio.event
 async def connect(sid: str, environ: dict, auth: dict | None) -> None:
     auth = auth or {}
-    api_key: str = auth.get("api_key", "")
-    main_agent_id: int = int(auth.get("main_agent_id", 1))
+    try:
+        api_key: str = auth.get("api_key", "")
+        main_agent_id: int = int(auth.get("main_agent_id", 1))
+    except (TypeError, ValueError):
+        logger.warning("[connect] rejected sid=%s (malformed auth)", sid)
+        await sio.emit("connection_status", False, to=sid)
+        return
 
     if not api_key or main_agent_id not in range(1, 6):
         logger.warning("[connect] rejected sid=%s (bad auth)", sid)
@@ -37,10 +41,8 @@ async def connect(sid: str, environ: dict, auth: dict | None) -> None:
 
     try:
         # Restore task graph — prefer new categories shape, fall back to legacy flat lists
-        raw_categories: list = auth.get("categories") or []
-        if raw_categories:
-            all_categories = normalizeCategories(raw_categories)
-        else:
+        all_categories = normalizeCategories(auth.get("categories"))
+        if not all_categories:
             all_categories = normalizeLegacyTasks(
                 auth.get("pending_task"), auth.get("running_task")
             )
@@ -49,7 +51,8 @@ async def connect(sid: str, environ: dict, auth: dict | None) -> None:
 
         # Pre-block dependents of already-failed/blocked completed categories
         status_map = buildStatusMap(pending, [], completed)
-        _, pending = cascadeBlocked(pending, status_map)
+        newly_blocked, pending = cascadeBlocked(pending, status_map)
+        completed.extend(newly_blocked)
 
         history: list[dict] = auth.get("history") or []
 
@@ -90,7 +93,7 @@ async def user_prompt(sid: str, data: str) -> None:
         mem.pending_categories + mem.running_categories + mem.completed_categories,
     )
 
-    asyncio.create_task(invokeMainAgent(sid, USER_PROMPT_SYSTEM, str(data)))
+    await invokeMainAgent(sid, USER_PROMPT_SYSTEM, str(data))
 
 
 @sio.event
@@ -98,6 +101,12 @@ async def questionnaire_answers(sid: str, data: list) -> None:
     mem = connected_users.get(sid)
     if mem is None:
         return
+
+    resetErrorBounce(sid)
+    await emitPlanningPlaceholder(
+        sid,
+        mem.pending_categories + mem.running_categories + mem.completed_categories,
+    )
 
     # Format the answers into a readable message
     lines: list[str] = []
@@ -108,7 +117,7 @@ async def questionnaire_answers(sid: str, data: list) -> None:
             lines.append(f"Q: {q}\nA: {a}")
     formatted = "\n\n".join(lines) if lines else str(data)
 
-    asyncio.create_task(invokeMainAgent(sid, QUESTIONNAIRE_SYSTEM, formatted))
+    await invokeMainAgent(sid, QUESTIONNAIRE_SYSTEM, formatted)
 
 
 @sio.event
@@ -126,7 +135,7 @@ async def agent_error_response(sid: str, data: str) -> None:
         await sio.emit("main_agent_response", str(data), to=sid)
         return
 
-    asyncio.create_task(invokeMainAgent(sid, GIVE_UP_SYSTEM_PROMPT, str(data)))
+    await invokeMainAgent(sid, GIVE_UP_SYSTEM_PROMPT, str(data))
 
 
 @sio.event
