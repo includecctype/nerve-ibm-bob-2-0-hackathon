@@ -35,26 +35,9 @@ def initModel(agent_id: int, api_key: str) -> BaseChatModel:
     return model
 
 
-class ToolErrorMiddleware:
-    """Wraps a tool to convert exceptions into recoverable error strings."""
-
-    def __init__(self, tool: Any) -> None:
-        self._tool = tool
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self._tool, name)
-
-    async def ainvoke(self, *args: Any, **kwargs: Any) -> Any:
-        try:
-            return await self._tool.ainvoke(*args, **kwargs)
-        except Exception as exc:  # noqa: BLE001
-            return f"Tool error: {exc}. Please adjust and try again."
-
-    def invoke(self, *args: Any, **kwargs: Any) -> Any:
-        try:
-            return self._tool.invoke(*args, **kwargs)
-        except Exception as exc:  # noqa: BLE001
-            return f"Tool error: {exc}. Please adjust and try again."
+def toolErrorMessage(exc: Exception) -> str:
+    """Convert any tool exception into a string the model can recover from."""
+    return f"Tool error: {exc}. Please adjust and try again."
 
 
 def buildAgent(
@@ -65,19 +48,23 @@ def buildAgent(
     thread_id: str | None = None,
 ) -> AgentSession:
     model = initModel(agent_id, api_key)
-    wrapped_tools = [ToolErrorMiddleware(t) for t in tools]
     checkpointer = MemorySaver()
     tid = thread_id or str(uuid.uuid4())
 
+    from langchain_core.messages import SystemMessage
     from langchain_core.prompts import ChatPromptTemplate
+    from langgraph.prebuilt import ToolNode
 
     prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", system_prompt),
+            # SystemMessage keeps JSON examples in the prompt literal: a ("system",
+            # ...) tuple would be parsed as a template and choke on its braces.
+            SystemMessage(system_prompt),
             ("placeholder", "{messages}"),
             ("placeholder", "{agent_scratchpad}"),
         ]
     )
+    tool_node = ToolNode(tools, handle_tool_errors=toolErrorMessage)
 
-    agent = create_react_agent(model=model, tools=wrapped_tools, prompt=prompt, checkpointer=checkpointer)  # type: ignore[arg-type]
+    agent = create_react_agent(model=model, tools=tool_node, prompt=prompt, checkpointer=checkpointer)  # type: ignore[arg-type]
     return AgentSession(agent=agent, thread_id=tid)
