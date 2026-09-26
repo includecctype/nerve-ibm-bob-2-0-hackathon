@@ -1,73 +1,111 @@
-import fs from "node:fs";
-import type { DisplayHistoryDTO, TaskCategoryDTO } from "../dto/wire.js";
-import { getUserData } from "../session/user_data.js";
-import { configFilePath } from "./config_path.js";
-import { readConfig } from "./config_reader.js";
+import { readFile, writeFile } from "node:fs/promises";
+import type { DisplayHistoryDTO, TaskUpdatePayload } from "../dto/wire";
+import { user_data } from "../session/user_data";
+import type { ConfigFile } from "../systemconfig/file";
+import { configFilePath } from "./config_path";
 
+const WRITE_DEBOUNCE_MS = 50;
+
+// Serializes disk writes; debounce coalesces bursts (placeholder + real task_update, etc.)
 let write_queue: Promise<void> = Promise.resolve();
 let debounce_timer: ReturnType<typeof setTimeout> | null = null;
-const pending_writes: Array<() => void> = [];
+let pending_resolvers: Array<() => void> = [];
 
-function scheduleWrite(): void {
-  if (debounce_timer !== null) {
+function flushDebouncedWrite(): Promise<void> {
+  if (debounce_timer) {
     clearTimeout(debounce_timer);
-  }
-  debounce_timer = setTimeout(() => {
     debounce_timer = null;
-    const resolvers = pending_writes.splice(0);
-    write_queue = write_queue.then(() => {
-      flushNow();
+  }
+  const resolvers = pending_resolvers;
+  pending_resolvers = [];
+  if (resolvers.length === 0) {
+    return write_queue;
+  }
+  write_queue = write_queue
+    .catch(() => {})
+    .then(() => writeUserDataToFile())
+    .catch(() => {})
+    .finally(() => {
       for (const resolve of resolvers) resolve();
     });
-  }, 50);
+  return write_queue;
 }
 
-function flushNow(): void {
-  const data = getUserData();
-  const config = readConfig();
+function enqueueWrite(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    pending_resolvers.push(resolve);
+    if (debounce_timer) clearTimeout(debounce_timer);
+    debounce_timer = setTimeout(() => {
+      debounce_timer = null;
+      void flushDebouncedWrite();
+    }, WRITE_DEBOUNCE_MS);
+  });
+}
 
-  // API keys and the selected model are persisted on every flush; sessions are
-  // only written once the first prompt has committed them.
-  config.api_key = data.api_keys;
-  config.main_agent_id = data.main_agent_id;
+async function waitForWrites(): Promise<void> {
+  if (debounce_timer || pending_resolvers.length > 0) {
+    await flushDebouncedWrite();
+  }
+  await write_queue;
+}
 
-  if (data.committed) {
-    config.session = config.session ?? {};
-    config.session[data.session_id] = {
-      categories: data.categories,
-      history: data.history,
+// save to user data struct
+function saveAPIKeyForModel(model_id: number, api_key: string): void {
+  if (!user_data) return;
+  user_data.api_keys[model_id] = api_key;
+  void enqueueWrite();
+}
+
+function saveMainAgentId(model_id: number): void {
+  if (!user_data) return;
+  user_data.main_agent_id = model_id;
+  void enqueueWrite();
+}
+
+function saveTaskUpdate(data: TaskUpdatePayload): void {
+  if (!user_data) return;
+  user_data.categories = [...data.categories];
+  void enqueueWrite();
+}
+
+function saveDisplayHistory(entry: DisplayHistoryDTO): void {
+  if (!user_data) return;
+  user_data.history.push(entry);
+  void enqueueWrite();
+}
+
+// trigger write to file
+async function writeUserDataToFile(): Promise<void> {
+  if (!user_data) return;
+
+  const file_path = configFilePath();
+
+  let config: ConfigFile;
+  try {
+    const raw = await readFile(file_path, "utf-8");
+    config = JSON.parse(raw);
+  } catch {
+    return;
+  }
+
+  config.api_key = { ...user_data.api_keys };
+  config.main_agent_id = user_data.main_agent_id;
+  if (user_data.session_committed) {
+    config.session[user_data.session_id] = {
+      categories: user_data.categories,
+      history: user_data.history,
       last_updated: Date.now(),
     };
   }
 
-  try {
-    fs.writeFileSync(configFilePath(), JSON.stringify(config, null, 2), "utf8");
-  } catch {
-    // non-fatal — best effort
-  }
+  await writeFile(file_path, JSON.stringify(config, null, "\t"));
 }
 
-export function writeUserDataToFile(): void {
-  scheduleWrite();
-}
-
-export function waitForWrites(): Promise<void> {
-  if (debounce_timer !== null) {
-    clearTimeout(debounce_timer);
-    debounce_timer = null;
-    flushNow();
-  }
-  return write_queue;
-}
-
-export function saveTaskUpdate(categories: TaskCategoryDTO[]): void {
-  const data = getUserData();
-  data.categories = categories;
-  writeUserDataToFile();
-}
-
-export function saveDisplayHistory(entry: DisplayHistoryDTO): void {
-  const data = getUserData();
-  data.history.push(entry);
-  writeUserDataToFile();
-}
+export {
+  saveAPIKeyForModel,
+  saveDisplayHistory,
+  saveMainAgentId,
+  saveTaskUpdate,
+  waitForWrites,
+  writeUserDataToFile,
+};

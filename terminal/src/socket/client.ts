@@ -1,41 +1,25 @@
-import { type Socket, io } from "socket.io-client";
-import { getUserData } from "../session/user_data.js";
+import { io, type Socket } from "socket.io-client";
+import { user_data } from "../session/user_data";
 
-const NERVE_BACKEND_URL = process.env.NERVE_BACKEND_URL ?? "https://nerve-boq5.onrender.com";
+export const BACKEND_URL = process.env.NERVE_BACKEND_URL ?? "https://nerve-boq5.onrender.com";
 
-let socket_instance: Socket | null = null;
+export const socket: Socket = io(BACKEND_URL, {
+  autoConnect: false,
+  auth: (cb) =>
+    cb(
+      user_data
+        ? {
+            client_kind: "cli",
+            api_keys: user_data.api_keys,
+            main_agent_id: user_data.main_agent_id,
+            categories: user_data.categories,
+            history: user_data.history,
+            api_key: user_data.api_keys[user_data.main_agent_id] ?? "",
+          }
+        : {},
+    ),
+});
 
-export function getSocket(): Socket {
-  if (!socket_instance) {
-    throw new Error("Socket not initialized — call connectSocket() first");
-  }
-  return socket_instance;
-}
-
-export function connectSocket(): Socket {
-  if (socket_instance) {
-    socket_instance.disconnect();
-  }
-
-  socket_instance = io(NERVE_BACKEND_URL, {
-    // Re-evaluated on every (re)connect so fresh credentials and session state
-    // are always sent; the default transports keep the HTTP polling fallback.
-    auth: (cb) => {
-      const data = getUserData();
-      cb({
-        api_keys: data.api_keys,
-        api_key: data.api_keys[String(data.main_agent_id)] ?? "",
-        main_agent_id: data.main_agent_id,
-        categories: data.categories,
-        history: data.history,
-      });
-    },
-  });
-
-  return socket_instance;
-}
-
-export function disconnectSocket(): void {
-  socket_instance?.disconnect();
-  socket_instance = null;
+export function connectSocket() {
+  socket.connect();
 }

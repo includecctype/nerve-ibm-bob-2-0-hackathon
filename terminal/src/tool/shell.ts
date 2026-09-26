@@ -1,5 +1,5 @@
 import { exec } from "node:child_process";
-import { COMMAND_TIMEOUT_MS, OUTPUT_CHAR_CAP } from "../systemconfig/limits.js";
+import { COMMAND_TIMEOUT_MS, OUTPUT_CHAR_CAP } from "../systemconfig/limits";
 
 function truncateOutput(text: string, cap: number): string {
   if (text.length <= cap) return text;
@@ -8,7 +8,7 @@ function truncateOutput(text: string, cap: number): string {
 
 // Runs in the user's shell, in the user's workspace, with the same 30s cap
 // and the same "Exit code / stdout / stderr" shape the model knew.
-export function shellTool(bash_command: string): Promise<string> {
+export function runTerminalCommand(bash_command: string): Promise<string> {
   return new Promise((resolve_promise) => {
     let settled = false;
     const finish = (result: string) => {
@@ -41,8 +41,6 @@ export function shellTool(bash_command: string): Promise<string> {
       },
     );
 
-    // Resolve from the timer: killing the child only ends the direct shell, so a
-    // grandchild holding the pipes can otherwise leave the promise pending.
     const timer = setTimeout(() => {
       child.kill();
       finish(`Error: command timed out after ${COMMAND_TIMEOUT_MS / 1000}s`);

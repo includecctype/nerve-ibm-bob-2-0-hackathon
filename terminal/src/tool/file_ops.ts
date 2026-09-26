@@ -1,7 +1,7 @@
 import { lstat, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { IGNORED_DIRS, MAX_READ_BYTES } from "../systemconfig/limits.js";
-import { resolveSafePath } from "./workspace.js";
+import { IGNORED_DIR_NAMES, MAX_READ_BYTES } from "../systemconfig/limits";
+import { resolveSafePath } from "./workspace";
 
 export async function writeFileTool(
   file_path: string,
@@ -120,7 +120,7 @@ async function walkTree(directory: string, prefix: string, lines: string[]): Pro
   }
 
   const entries = names
-    .filter((name) => !IGNORED_DIRS.has(name))
+    .filter((name) => !IGNORED_DIR_NAMES.has(name))
     .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
   if (entries.length === 0) return;
 
@@ -167,7 +167,7 @@ export async function listDirTool(directory_path: string): Promise<string> {
   } catch {
     names = [];
   }
-  if (names.some((name) => !IGNORED_DIRS.has(name))) lines.push("│");
+  if (names.some((name) => !IGNORED_DIR_NAMES.has(name))) lines.push("│");
   await walkTree(safe.path, "", lines);
 
   return lines.join("\n");

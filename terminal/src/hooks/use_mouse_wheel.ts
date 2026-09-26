@@ -4,28 +4,35 @@ import { useEffect, useRef } from "react";
 const ESC = String.fromCharCode(27);
 const MOUSE_PREFIX = `${ESC}[<`;
 
+function parseMouseSgr(input: string): { button: number; x: number; y: number } | null {
+  if (!input.startsWith(MOUSE_PREFIX)) {
+    return null;
+  }
+  const last = input.at(-1);
+  if (last !== "M" && last !== "m") {
+    return null;
+  }
+  const parts = input.slice(MOUSE_PREFIX.length, -1).split(";");
+  if (parts.length !== 3) {
+    return null;
+  }
+  const button = Number(parts[0]);
+  const x = Number(parts[1]);
+  const y = Number(parts[2]);
+  if (!Number.isFinite(button) || !Number.isFinite(x) || !Number.isFinite(y)) {
+    return null;
+  }
+  return { button, x, y };
+}
+
 const ENABLE_MOUSE = `${ESC}[?1000h${ESC}[?1006h`;
 const DISABLE_MOUSE = `${ESC}[?1000l${ESC}[?1006l`;
 
 export type WheelDirection = "up" | "down";
 
-function parseMouseSgr(input: string): { button: number; x: number; y: number } | null {
-  if (!input.startsWith(MOUSE_PREFIX)) return null;
-  const last = input.at(-1);
-  if (last !== "M" && last !== "m") return null;
-  const parts = input.slice(MOUSE_PREFIX.length, -1).split(";");
-  if (parts.length !== 3) return null;
-  const button = Number(parts[0]);
-  const x = Number(parts[1]);
-  const y = Number(parts[2]);
-  if (!Number.isFinite(button) || !Number.isFinite(x) || !Number.isFinite(y)) return null;
-  return { button, x, y };
-}
-
 /**
- * Enables terminal SGR mouse reporting and reports wheel events to `on_wheel`.
- * Mouse sequences are swallowed on Ink's shared input emitter so overlays and
- * text inputs never receive the raw escape bytes.
+ * Enables terminal SGR mouse reporting and reports wheel events.
+ * Swallows mouse sequences on Ink's shared input emitter so TextInput never inserts them.
  */
 export function useMouseWheel(
   enabled: boolean,
@@ -64,12 +71,4 @@ export function useMouseWheel(
       internal_eventEmitter.emit = original_emit;
     };
   }, [enabled, internal_eventEmitter, stdout]);
-}
-
-// Fallback for a non-patched emitter: Ink strips the leading ESC before the
-// string reaches `useInput`, so match the remaining `[<` form here.
-const MOUSE_PATTERN = /^\[<(\d+);(\d+);(\d+)[Mm]/;
-
-export function isMouseEvent(input: string): boolean {
-  return MOUSE_PATTERN.test(input);
 }

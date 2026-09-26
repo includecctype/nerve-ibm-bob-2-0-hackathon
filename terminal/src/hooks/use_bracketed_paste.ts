@@ -46,8 +46,9 @@ function normalizeChunk(data: string): string {
 
 /**
  * Enables terminal bracketed-paste mode and rewrites pasted chunks on Ink's
- * shared input emitter: paste markers are stripped and CR line endings become
- * LF, so a paste can never trigger the prompt box Enter-to-submit path.
+ * shared input emitter (same pattern as useMouseWheel): paste markers are
+ * stripped and CR line endings become LF, so a paste can never trigger the
+ * prompt box Enter-to-submit path.
  */
 export function useBracketedPaste(): void {
   const { stdout } = useStdout();

@@ -1,8 +1,10 @@
-import path from "node:path";
-import { configFilePath } from "../systemconfig/file.js";
+import { join } from "node:path";
+import { CONFIG_FILE_NAME, CONFIG_FILE_PATH_DIR } from "../systemconfig/file";
 
-export { configFilePath };
+export function configFilePath(): string {
+  return join(process.cwd(), CONFIG_FILE_PATH_DIR, CONFIG_FILE_NAME);
+}
 
-export function configDirPath(cwd: string = process.cwd()): string {
-  return path.join(cwd, "user_config");
+export function configDirPath(): string {
+  return join(process.cwd(), CONFIG_FILE_PATH_DIR);
 }

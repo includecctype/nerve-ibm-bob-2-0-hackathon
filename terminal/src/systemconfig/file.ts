@@ -1,22 +1,16 @@
-import path from "node:path";
+import type { SessionData } from "../dto/wire";
 
-export const CONFIG_DIR_NAME = "user_config";
+export const CONFIG_FILE_PATH_DIR = "user_config/";
 export const CONFIG_FILE_NAME = "config.json";
 
-export function configFilePath(cwd: string = process.cwd()): string {
-  return path.join(cwd, CONFIG_DIR_NAME, CONFIG_FILE_NAME);
-}
-
-export interface DefaultConfig {
-  api_key: Record<string, string>;
+export type ConfigFile = {
+  api_key: Record<number, string>;
   main_agent_id: number;
-  session: Record<string, unknown>;
-}
+  session: Record<string, SessionData>;
+};
 
-export function defaultConfig(): DefaultConfig {
-  return {
-    api_key: {},
-    main_agent_id: 1,
-    session: {},
-  };
-}
+export const DEFAULT_CONFIG: ConfigFile = {
+  api_key: {},
+  main_agent_id: 1,
+  session: {},
+};
