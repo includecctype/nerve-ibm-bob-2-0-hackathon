@@ -3,15 +3,11 @@ from __future__ import annotations
 import logging
 import time
 
+from ai_tool.task.emit.task import updateTaskDisplay
 from gateway.agent.with_task_context import withTaskContext
 from gateway.config import connected_users, sio
 from gateway.observability.timing import logStep
-from gateway.retry.agent_error import (
-    bumpErrorBounce,
-    emitAgentError,
-    isGiveUpExhausted,
-    resetErrorBounce,
-)
+from gateway.retry.agent_error import emitAgentError, resetErrorBounce
 from gateway.retry.rate_limit import callWithRateLimitRetry
 from gateway.state.session_locks import (
     acquirePromptLock,
@@ -58,15 +54,10 @@ async def invokeMainAgent(sid: str, system_prompt: str, user_message: str) -> No
     except Exception as exc:
         logStep("agent_turn_failed", turn_start)
         logger.exception("[agent] turn failed for sid=%s", sid)
-        error_msg = str(exc)
-
-        bumpErrorBounce(sid)
-        if isGiveUpExhausted(sid):
-            # Past the cap — emit provider text directly, no model call
-            await sio.emit("main_agent_response", error_msg, to=sid)
-        else:
-            # Give-up bounce: invoke with no tools, plain text only
-            await emitAgentError(sid, error_msg)
+        # The CLI owns the bounce counter: emit the error and let its
+        # agent_error_response drive the give-up loop.
+        await emitAgentError(sid, f"Model failed after retries: {exc}")
+        await updateTaskDisplay(sid, connected_users)
 
     finally:
         await finishPromptLock(sid)

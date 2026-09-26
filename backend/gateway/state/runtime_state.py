@@ -11,5 +11,5 @@ exec_locks: dict[str, asyncio.Lock] = {}
 # Error bounce counters — count consecutive give-up bounces per sid
 error_bounce_count: dict[str, int] = {}
 
-# Error cooldown timestamps — suppress duplicate error emits per sid
-error_cooldown: dict[str, float] = {}
+# Error cooldown timestamps — suppress a repeated (sid, message) within the window
+error_cooldown: dict[tuple[str, str], float] = {}
