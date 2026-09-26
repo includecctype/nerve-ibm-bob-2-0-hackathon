@@ -100,8 +100,8 @@ Models are selected by id (stored in `user_config/config.json`):
 |---|---|
 | 1 | OpenRouter Auto |
 | 2 | Groq GPT-OSS 120B |
-| 3 | Anthropic Claude Fable 5 |
-| 4 | Baseten Kimi K2.6 |
+| 3 | Claude Fable 5 |
+| 4 | Kimi K2.6 |
 | 5 | DeepSeek Chat |
 
 **Keys**
