@@ -1,0 +1,66 @@
+.file-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: #0b0f14;
+}
+
+.file-viewer.empty {
+  align-items: center;
+  justify-content: center;
+  color: #67788c;
+  font-size: 13px;
+}
+
+.viewer-header {
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #8b98a9;
+  border-bottom: 1px solid #1c2633;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.viewer-note {
+  color: #d0a94a;
+}
+
+.viewer-body {
+  flex: 1;
+  overflow: auto;
+}
+
+.viewer-code {
+  margin: 0;
+  padding: 8px 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.viewer-line {
+  display: flex;
+  gap: 12px;
+  padding: 0 12px;
+  white-space: pre;
+}
+
+.viewer-line-number {
+  width: 40px;
+  flex: none;
+  text-align: right;
+  color: #4d5c6e;
+  user-select: none;
+}
+
+.viewer-line-text {
+  color: #d7dde5;
+}
+
+.viewer-error {
+  color: #ff8b8b;
+  padding: 12px;
+  font-size: 12.5px;
+  white-space: pre-wrap;
+}
