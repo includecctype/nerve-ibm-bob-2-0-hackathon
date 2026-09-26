@@ -5,7 +5,7 @@ from typing import Any
 import socketio
 from pydantic import BaseModel, Field
 
-sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
+sio = socketio.AsyncServer(async_mode="asgi")
 app = socketio.ASGIApp(sio)
 
 
