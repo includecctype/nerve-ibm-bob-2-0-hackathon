@@ -323,7 +323,12 @@ export function App() {
     const full = raw.trim();
     if (full) {
       if (full.startsWith("/")) {
-        void handleCommand(full);
+        const suggestions = filterCommands(full);
+        const is_exact = VALID_COMMANDS.includes(full);
+        const index = Math.min(command_index, suggestions.length - 1);
+        const chosen =
+          !is_exact && index >= 0 && suggestions[index] ? suggestions[index].name : full;
+        void handleCommand(chosen);
       } else {
         handleSubmit(full);
       }
