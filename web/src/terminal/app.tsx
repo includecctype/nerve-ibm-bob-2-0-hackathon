@@ -1,548 +1,663 @@
-import { Box, Text, useApp, useInput } from "ink";
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { filterCommands } from "./command/command_list.js";
-import { KeyPrompt } from "./command/key_prompt.js";
-import { ModelPicker } from "./command/model_picker.js";
-import { QuestionnaireBox } from "./command/questionnaire_box.js";
-import { type SessionEntry, SessionPicker } from "./command/session_picker.js";
+import { Box, Text, useInput } from "ink";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { filterCommands, isSlashCommand } from "./command/command_list";
+import type { CommandMode } from "./command/command_mode";
+import { exitApp, isExitCommand } from "./command/exit_command";
+import { applyApiKeyChange, isKeyCommand } from "./command/key_command";
+import {
+  getModelLabel,
+  hasApiKeyForModel,
+  isModelCommand,
+  persistModelChoice,
+} from "./command/model_command";
+import { buildModelSelectOptions } from "./command/model_options";
+import { QuestionnaireBox } from "./command/questionnaire_box";
+import { isRestartCommand, restartConnection } from "./command/restart_command";
+import {
+  applySessionChoice,
+  isSessionCommand,
+  loadSessionOptions,
+  startNewSession,
+} from "./command/session_command";
+import { SuggestionBox } from "./command/suggestion_box";
 import type {
   DisplayHistoryDTO,
   QuestionnaireAnswerDTO,
   StructuredQuestionDTO,
   TaskCategoryDTO,
-  TaskUpdatePayload,
-} from "./dto/wire.js";
-import { useBracketedPaste } from "./hooks/use_bracketed_paste.js";
-import { useLayout } from "./hooks/use_layout.js";
-import { isMouseEvent, useMouseWheel } from "./hooks/use_mouse_wheel.js";
+} from "./dto/wire";
+import { useBracketedPaste } from "./hooks/use_bracketed_paste";
+import { useLayout, useScreenSize, WINDOW_PAD } from "./hooks/use_layout";
+import { useMouseWheel } from "./hooks/use_mouse_wheel";
+import { readConfig } from "./save/config_reader";
+import { saveDisplayHistory } from "./save/config_writer";
+import { ensureConfigFile } from "./save/create_config_file";
+import { setUserData, user_data } from "./session/user_data";
+import { connectSocket } from "./socket/client";
+import { emitQuestionnaireAnswers, emitUserPrompt } from "./socket/emitters";
 import {
-  ensureConfigFile,
-  readConfig,
-  readSessionData,
-  saveDisplayHistory,
-  waitForWrites,
-  writeUserDataToFile,
-} from "./save/config_store.js";
-import { commitSession, getUserData, setUserData } from "./session/user_data.js";
-import { connectSocket, disconnectSocket } from "./socket/client.js";
+  onConnectionStatus,
+  onDisplay,
+  onError,
+  onQuestionnaire,
+  onSubagentResponse,
+  onTaskUpdate,
+} from "./socket/handler_registry";
+import { MODEL_OPTIONS } from "./systemconfig/model";
+import { ChatViewport } from "./ui/chat_viewport";
+import { CommandOverlay } from "./ui/command_overlay";
+import { QUESTION_PREFIX } from "./ui/display_entry";
+import { LogoView } from "./ui/logo_view";
+import { PromptBox } from "./ui/prompt_box";
+import { buildTaskLines, TaskPane } from "./ui/task_pane";
 import {
-  emitAgentErrorResponse,
-  emitQuestionnaireAnswers,
-  emitUserPrompt,
-} from "./socket/emitters.js";
-import { attachHandlers } from "./socket/handler_registry.js";
-import type { ListenerCallbacks } from "./socket/listener.js";
-import { getModelLabel } from "./systemconfig/model.js";
-import { ChatViewport } from "./ui/chat_viewport.js";
-import { CommandOverlay } from "./ui/command_overlay.js";
-import { LogoView } from "./ui/logo_view.js";
-import { PromptBox } from "./ui/prompt_box.js";
-import { StatusFooter } from "./ui/status_footer.js";
-import { TaskPane } from "./ui/task_pane.js";
-import { chatRows } from "./ui/text_window.js";
-import { theme } from "./ui/theme.js";
+  displayRowsFromEntries,
+  flattenDisplayEntries,
+  groupRowsIntoBlocks,
+  windowFromBottom,
+  windowFromTop,
+} from "./ui/text_window";
+import { BG_BLACK, BG_PANEL } from "./ui/theme";
+import "./socket/listener";
 
-// ── Bootstrap ──────────────────────────────────────────────────────────────
-ensureConfigFile();
-const stored_config = readConfig();
-setUserData({
-  api_keys: stored_config.api_key,
-  main_agent_id: stored_config.main_agent_id,
-});
-
-const VALID_COMMANDS = ["/model", "/key", "/session", "/restart", "/exit"];
-
-const CONNECTION_HINT = "Not connected to the backend — press /model or /key to enter an API key.";
-
-type OverlayState =
-  | { kind: "model" }
-  | { kind: "key_select" }
-  | { kind: "key"; model_id: number; switch_after: boolean }
-  | { kind: "session" };
-
-function buildSessionEntries(): SessionEntry[] {
-  const config = readConfig();
-  return Object.entries(config.session ?? {})
-    .sort(([, a], [, b]) => (b.last_updated ?? 0) - (a.last_updated ?? 0))
-    .map(([session_id, session]) => ({
-      id: session_id,
-      label: `${new Date(session.last_updated ?? 0).toLocaleString()} — ${
-        session.categories?.length ?? 0
-      } categories`,
-    }));
-}
+const PROMPT_PLACEHOLDER = "SPAM your prompts here... (or /model, /session)";
 
 export function App() {
-  const { exit } = useApp();
-  const layout = useLayout();
-  useBracketedPaste();
+  const [logo_show, setLogoShow] = useState(true);
 
-  const [connected, setConnected] = useState(false);
   const [displays, setDisplays] = useState<DisplayHistoryDTO[]>([]);
-  const [categories, setCategories] = useState<TaskCategoryDTO[]>([]);
-  const [questions, setQuestions] = useState<StructuredQuestionDTO[] | null>(null);
-  const [input_value, setInputValue] = useState("");
-  const [command_mode, setCommandMode] = useState(false);
-  const [command_index, setCommandIndex] = useState(0);
-  const [chat_scroll, setChatScroll] = useState(0);
+  const [tasks, setTasks] = useState<TaskCategoryDTO[]>([]);
+  const [display_scroll, setDisplayScroll] = useState(0);
   const [task_scroll, setTaskScroll] = useState(0);
-  const [error_msg, setErrorMsg] = useState<string | null>(null);
-  const [overlay, setOverlay] = useState<OverlayState | null>(null);
-  const [model_id, setModelId] = useState(getUserData().main_agent_id);
+  const [, setConnectionStatus] = useState<boolean>(false);
+
+  const [questions, setQuestions] = useState<StructuredQuestionDTO[]>([]);
+  const [current_question, setCurrentQuestion] = useState(0);
+  const [answers, setAnswers] = useState<QuestionnaireAnswerDTO[]>([]);
+  const [questionnaire_free_text, setQuestionnaireFreeText] = useState(false);
+  const [questionnaire_draft, setQuestionnaireDraft] = useState("");
   const questions_ref = useRef<StructuredQuestionDTO[]>([]);
+  const questionnaire_active = questions.length > 0 && current_question < questions.length;
 
-  // ── Socket wiring ─────────────────────────────────────────────────────
-  const startSocket = useCallback(() => {
-    const socket = connectSocket();
-    const callbacks: ListenerCallbacks = {
-      onConnectionStatus: (ok) => {
-        setConnected(ok);
-        if (!ok) {
-          setDisplays((prev) =>
-            prev.length > 0 &&
-            prev[prev.length - 1].role === "system" &&
-            prev[prev.length - 1].content === CONNECTION_HINT
-              ? prev
-              : [...prev, { role: "system", content: CONNECTION_HINT }],
-          );
-        }
-      },
-      onMainAgentResponse: (text) => {
-        setErrorMsg(null);
-        setDisplays((prev) => [...prev, { role: "assistant", content: text }]);
-      },
-      onTaskUpdate: (payload: TaskUpdatePayload) => setCategories(payload.categories),
-      onSubagentResponse: (data) => {
-        // Display-only progress — sub-agent reports never reach the main agent.
-        const entry: DisplayHistoryDTO = {
-          role: "system",
-          content: `${data.status === "done" ? "✓" : "✗"} [${data.category}] ${data.report}`,
-        };
-        saveDisplayHistory(entry);
-        setDisplays((prev) => [...prev, entry]);
-      },
-      onQuestionnaire: (qs) => {
-        // A duplicate emit of the same questions must not reset the write-in box.
-        const prev = questions_ref.current;
-        if (
-          prev.length > 0 &&
-          prev.length === qs.length &&
-          JSON.stringify(prev) === JSON.stringify(qs)
-        ) {
-          return;
-        }
-        questions_ref.current = qs;
-        setQuestions(qs);
-      },
-      onAgentError: (message) => {
-        setErrorMsg(message);
-        emitAgentErrorResponse(message);
-      },
-    };
-    attachHandlers(socket, callbacks);
-  }, []);
+  const [command_mode, setCommandMode] = useState<CommandMode>({
+    type: "none",
+  });
 
-  const reconnect = useCallback(async () => {
-    await waitForWrites();
-    setConnected(false);
-    startSocket();
-  }, [startSocket]);
+  const [input_value, setInputValue] = useState("");
+  const [selected_idx, setSelectedIdx] = useState(0);
+  const [input_key, setInputKey] = useState(0);
+
+  const { height: screen_height, width: screen_width } = useScreenSize();
+
+  const command_matches =
+    command_mode.type === "none" && !questionnaire_active ? filterCommands(input_value) : [];
+  const suggestion_open = command_matches.length > 0;
+
+  const {
+    inner_width,
+    inner_height,
+    show_task_bar,
+    task_pane_width,
+    chat_gap,
+    chat_pane_width,
+    chat_content_width,
+    task_gutter_width,
+    task_text_width,
+    logo_prompt_width,
+    task_viewport_rows,
+    prompt_max_rows,
+    prompt_box_height,
+    display_viewport_rows,
+    prompt_scrollable,
+    entry_content_width,
+  } = useLayout({
+    screen_width,
+    screen_height,
+    command_matches,
+    questionnaire_active,
+    questions,
+    current_question,
+    input_value,
+    questionnaire_free_text,
+    questionnaire_draft,
+  });
+
+  const status_cwd = process.cwd();
+  const status_model_label = user_data ? getModelLabel(user_data.main_agent_id) : "—";
 
   useEffect(() => {
-    startSocket();
+    questions_ref.current = questions;
+  }, [questions]);
 
-    return () => {
-      // Unmounting must also drop the socket so its reconnect timers stop.
-      disconnectSocket();
-    };
-  }, [startSocket]);
+  const chat_lines = useMemo(
+    () => flattenDisplayEntries(displays, entry_content_width),
+    [displays, entry_content_width],
+  );
+  const chat_rows = useMemo(() => displayRowsFromEntries(chat_lines), [chat_lines]);
 
-  // ── Slash commands ────────────────────────────────────────────────────
-  const handleCommand = useCallback(
-    async (cmd: string) => {
-      switch (cmd) {
-        case "/exit":
-          await waitForWrites();
-          disconnectSocket();
-          exit();
-          break;
-        case "/restart":
-          await waitForWrites();
-          setDisplays([]);
-          setCategories([]);
-          setQuestions(null);
-          setOverlay(null);
-          setErrorMsg(null);
-          setChatScroll(0);
-          setTaskScroll(0);
-          setInputValue("");
-          setCommandMode(false);
-          setConnected(false);
-          startSocket();
-          break;
-        case "/model":
-          setOverlay({ kind: "model" });
-          break;
-        case "/key":
-          setOverlay({ kind: "key_select" });
-          break;
-        case "/session":
-          setOverlay({ kind: "session" });
-          break;
-        default:
-          setDisplays((prev) => [
-            ...prev,
-            {
-              role: "system",
-              content: `Unknown command: ${cmd}. Valid: ${VALID_COMMANDS.join(", ")}`,
-            },
-          ]);
+  const task_lines = useMemo(
+    () => buildTaskLines(tasks, task_text_width),
+    [tasks, task_text_width],
+  );
+
+  const chat_window = windowFromBottom(
+    chat_rows,
+    display_viewport_rows - (display_scroll > 0 ? 1 : 0),
+    display_scroll,
+  );
+  const chat_blocks = groupRowsIntoBlocks(chat_window.visible);
+  const task_window = windowFromTop(task_lines, task_viewport_rows, task_scroll);
+
+  const scrollChat = (delta: number) => {
+    setDisplayScroll((prev) => Math.max(0, Math.min(chat_window.maxScroll, prev + delta)));
+  };
+  const scrollTasks = (delta: number) => {
+    setTaskScroll((prev) => Math.max(0, Math.min(task_window.maxScroll, prev + delta)));
+  };
+
+  const cancelActiveCommand = () => {
+    setCommandMode({ type: "none" });
+    setLogoShow(false);
+    setInputValue("");
+    setSelectedIdx(0);
+    setInputKey((prev) => prev + 1);
+  };
+
+  useInput(
+    (input, key) => {
+      void input;
+      if (key.escape && questionnaire_free_text) {
+        setQuestionnaireFreeText(false);
+        setQuestionnaireDraft("");
+        return;
+      }
+      if (key.escape && command_mode.type !== "none") {
+        cancelActiveCommand();
+        return;
+      }
+      if (suggestion_open) {
+        if (key.upArrow) {
+          setSelectedIdx((prev) => (prev <= 0 ? command_matches.length - 1 : prev - 1));
+        } else if (key.downArrow) {
+          setSelectedIdx((prev) => (prev >= command_matches.length - 1 ? 0 : prev + 1));
+        } else if (key.tab) {
+          const entry = command_matches[selected_idx];
+          if (entry) {
+            setInputValue(entry.name);
+            setInputKey((prev) => prev + 1);
+          }
+        }
+        return;
+      }
+      if (command_mode.type !== "none" || logo_show || questionnaire_active) {
+        return;
+      }
+
+      if (key.ctrl && key.upArrow) {
+        scrollTasks(-1);
+      } else if (key.ctrl && key.downArrow) {
+        scrollTasks(1);
+      } else if (key.pageUp) {
+        scrollChat(display_viewport_rows);
+      } else if (key.pageDown) {
+        scrollChat(-display_viewport_rows);
+      } else if (key.home) {
+        scrollChat(chat_window.maxScroll);
+      } else if (key.end) {
+        scrollChat(-chat_window.maxScroll);
+      } else if (key.upArrow) {
+        if (prompt_scrollable) return;
+        scrollChat(1);
+      } else if (key.downArrow) {
+        if (prompt_scrollable) return;
+        scrollChat(-1);
       }
     },
-    [exit, startSocket],
+    { isActive: true },
   );
 
-  // ── Overlay flows ─────────────────────────────────────────────────────
-  const applyModel = useCallback(
-    async (next_model_id: number) => {
-      setUserData({ main_agent_id: next_model_id });
-      setModelId(next_model_id);
-      writeUserDataToFile();
-      setOverlay(null);
-      await reconnect();
-    },
-    [reconnect],
-  );
-
-  const handleModelSelect = (selected_id: number) => {
-    const keys = getUserData().api_keys;
-    if (!keys[String(selected_id)]) {
-      setOverlay({ kind: "key", model_id: selected_id, switch_after: true });
+  useBracketedPaste();
+  useMouseWheel(!logo_show, (direction, x) => {
+    if (command_mode.type !== "none") {
       return;
     }
-    void applyModel(selected_id);
-  };
-
-  const handleKeyTargetSelect = (selected_id: number) => {
-    setOverlay({
-      kind: "key",
-      model_id: selected_id,
-      switch_after: selected_id === getUserData().main_agent_id,
-    });
-  };
-
-  const handleKeySubmit = async (value: string) => {
-    if (!overlay || overlay.kind !== "key") return;
-    const keys = getUserData().api_keys;
-    setUserData({ api_keys: { ...keys, [String(overlay.model_id)]: value } });
-    writeUserDataToFile();
-    setOverlay(null);
-    if (overlay.switch_after) {
-      await applyModel(overlay.model_id);
-    }
-  };
-
-  const handleSessionSelect = async (session_id: string | null) => {
-    // Persist the outgoing session before its in-memory state is replaced.
-    await waitForWrites();
-    setOverlay(null);
-    if (session_id === null) {
-      setUserData({
-        session_id: crypto.randomUUID(),
-        categories: [],
-        history: [],
-        committed: false,
-      });
-      setCategories([]);
-      setDisplays([]);
-      setChatScroll(0);
-      await reconnect();
-      return;
-    }
-
-    const saved = readSessionData(readConfig(), session_id);
-    if (!saved) return;
-    setUserData({
-      session_id,
-      categories: saved.categories,
-      history: saved.history,
-      committed: true,
-    });
-    setCategories(saved.categories);
-    setDisplays(saved.history);
-    setChatScroll(0);
-    await reconnect();
-  };
-
-  const handleQuestionnaireComplete = (answers: QuestionnaireAnswerDTO[]) => {
-    setQuestions(null);
-    emitQuestionnaireAnswers(answers);
-    const summary = answers
-      .map((answer) => `Q: ${answer.question}\nA: ${answer.answer}`)
-      .join("\n\n");
-    const entry: DisplayHistoryDTO = { role: "system", content: summary };
-    saveDisplayHistory(entry);
-    setDisplays((prev) => [...prev, entry]);
-  };
-
-  const handleSubmit = (text: string) => {
-    if (!text.trim()) return;
-    commitSession();
-    const entry: DisplayHistoryDTO = { role: "user", content: text };
-    saveDisplayHistory(entry);
-    setDisplays((prev) => [...prev, entry]);
-    emitUserPrompt(text);
-  };
-
-  // chat_scroll counts wrapped terminal rows up from the newest message: 0 is
-  // pinned to the bottom, so new messages appear without touching the state.
-  const chat_row_count = chatRows(displays, layout.chat_width).length;
-  const max_chat_scroll = Math.max(0, chat_row_count - layout.chat_height);
-
-  // Mouse wheel scrolls whichever pane the pointer is over; mouse sequences are
-  // swallowed at the input emitter so overlays never see them.
-  useMouseWheel(true, (direction, x) => {
-    const over_tasks = x - 1 >= layout.chat_width;
-    if (direction === "up") {
-      if (over_tasks) setTaskScroll((value) => Math.max(0, value - 1));
-      else setChatScroll((value) => Math.min(max_chat_scroll, value + 1));
-    } else if (over_tasks) {
-      setTaskScroll((value) => value + 1);
+    const over_tasks = show_task_bar && x > chat_pane_width;
+    const delta = direction === "up" ? 3 : -3;
+    if (over_tasks) {
+      scrollTasks(-delta);
     } else {
-      setChatScroll((value) => Math.max(0, value - 1));
+      scrollChat(delta);
     }
   });
 
   const handleInputChange = (value: string) => {
     setInputValue(value);
-    setCommandMode(value.startsWith("/"));
-    setCommandIndex(0);
+    setSelectedIdx(0);
   };
 
-  const handlePromptSubmit = (raw: string) => {
-    const full = raw.trim();
-    if (full) {
-      if (full.startsWith("/")) {
-        const suggestions = filterCommands(full);
-        const is_exact = VALID_COMMANDS.includes(full);
-        const index = Math.min(command_index, suggestions.length - 1);
-        const chosen =
-          !is_exact && index >= 0 && suggestions[index] ? suggestions[index].name : full;
-        void handleCommand(chosen);
-      } else {
-        handleSubmit(full);
+  const completeToSelectedCommand = (value: string): string => {
+    if (!value.startsWith("/")) return value;
+    const exact = command_matches.find((entry) => entry.name === value);
+    if (exact) return exact.name;
+    const selected = command_matches[selected_idx] ?? command_matches[0];
+    return selected ? selected.name : value;
+  };
+
+  // if someone press something like control+c
+  // init: ensure config → read → connect
+  useEffect(() => {
+    (async () => {
+      await ensureConfigFile();
+      const data = await readConfig();
+      setUserData(data);
+      setTasks(user_data?.categories ?? []);
+      setDisplayScroll(0);
+      setTaskScroll(0);
+      connectSocket();
+    })();
+  }, []);
+
+  // assign
+  useEffect(() => {
+    onDisplay((entry) => {
+      setDisplays((prev) => [...prev, entry]);
+    });
+    onTaskUpdate(() => {
+      setTasks(user_data?.categories ?? []);
+    });
+    // Display-only progress line — sub-agent reports never reach the main agent.
+    onSubagentResponse((data) => {
+      const entry: DisplayHistoryDTO = {
+        role: "system",
+        content: `${data.status === "done" ? "✓" : "✗"} [${data.category}] ${data.report}`,
+      };
+      saveDisplayHistory(entry);
+      setDisplays((prev) => [...prev, entry]);
+    });
+    onConnectionStatus((connected) => {
+      setConnectionStatus(connected);
+      if (!connected) {
+        setDisplays((prev) => [
+          ...prev,
+          {
+            role: "system",
+            content: "Cannot connect to model — set API key with /model",
+          },
+        ]);
       }
+    });
+    onQuestionnaire((qs) => {
+      // A duplicate emit of the same questions must not wipe the write-in box.
+      const prev = questions_ref.current;
+      if (
+        prev.length > 0 &&
+        prev.length === qs.length &&
+        JSON.stringify(prev) === JSON.stringify(qs)
+      ) {
+        return;
+      }
+      questions_ref.current = qs;
+      setQuestions(qs);
+      setCurrentQuestion(0);
+      setAnswers([]);
+      setQuestionnaireFreeText(false);
+      setQuestionnaireDraft("");
+    });
+    onError((message) => {
+      setDisplays((prev) => [...prev, { role: "error", content: message }]);
+    });
+  }, []);
+
+  const appendSystemNote = (content: string) => {
+    setDisplays((prev) => [...prev, { role: "system", content }]);
+  };
+
+  const finishModelSwitch = async (model_id: number, api_key: string) => {
+    await persistModelChoice(model_id, api_key);
+    appendSystemNote(`Switched model to ${getModelLabel(model_id)} (id=${model_id})`);
+    setCommandMode({ type: "none" });
+    setLogoShow(false);
+    setInputValue("");
+    setSelectedIdx(0);
+    setInputKey((prev) => prev + 1);
+  };
+
+  const handleModelSelect = async (value: string) => {
+    const option = buildModelSelectOptions().find((o) => o.value === value);
+    if (!option) return;
+    const model = MODEL_OPTIONS.find((m) => m.id === option.modelId);
+    if (!model) return;
+
+    if (hasApiKeyForModel(model.id)) {
+      const existing_key = user_data?.api_keys[model.id];
+      if (existing_key) {
+        await finishModelSwitch(model.id, existing_key);
+      }
+    } else {
+      setCommandMode({
+        type: "enter_api_key",
+        modelId: model.id,
+        modelLabel: model.label,
+        flow: "model",
+      });
+    }
+  };
+
+  const handleKeyModelSelect = (value: string) => {
+    const option = buildModelSelectOptions().find((o) => o.value === value);
+    if (!option) return;
+    const model = MODEL_OPTIONS.find((m) => m.id === option.modelId);
+    if (!model) return;
+    setCommandMode({
+      type: "enter_api_key",
+      modelId: model.id,
+      modelLabel: model.label,
+      flow: "key",
+    });
+  };
+
+  const handleApiKeySubmit = async (value: string) => {
+    if (command_mode.type !== "enter_api_key") return;
+    const trimmed = value.trim();
+    if (!trimmed) {
+      appendSystemNote(
+        `API key cannot be empty. Try ${command_mode.flow === "key" ? "/key" : "/model"} again.`,
+      );
+      setCommandMode({ type: "none" });
+      return;
+    }
+    if (command_mode.flow === "key") {
+      await applyApiKeyChange(command_mode.modelId, trimmed);
+      appendSystemNote(`Updated API key for ${command_mode.modelLabel}`);
+      setCommandMode({ type: "none" });
+    } else {
+      await finishModelSwitch(command_mode.modelId, trimmed);
     }
     setInputValue("");
-    setCommandMode(false);
-    setCommandIndex(0);
+    setSelectedIdx(0);
+    setInputKey((prev) => prev + 1);
   };
 
-  // ── Keyboard ──────────────────────────────────────────────────────────
-  // Text editing and submission live in PromptBox; this handler owns only the
-  // global shortcuts (scrolling, Escape) so the two do not fight over keys.
-  useInput((input, key) => {
-    // Overlays and the questionnaire own the keyboard while they are open.
-    if (overlay || questions) return;
+  const finishSessionSwitch = () => {
+    setCommandMode({ type: "none" });
+    setLogoShow(false);
+    setInputValue("");
+    setSelectedIdx(0);
+    setInputKey((prev) => prev + 1);
+  };
 
-    // Mouse sequences are normally swallowed at the emitter; ignore any that
-    // slip through on a non-patched stdin.
-    if (isMouseEvent(input)) return;
+  const handleSessionSelect = async (value: string) => {
+    if (command_mode.type !== "select_session") return;
+    const option = command_mode.sessions.find((s) => s.value === value);
+    if (!option) return;
 
-    // Slash-command suggestions own Up/Down/Tab while command mode is active.
-    const suggestions = command_mode ? filterCommands(input_value) : [];
-    if (suggestions.length > 0) {
-      if (key.upArrow) {
-        setCommandIndex((index) => (index <= 0 ? suggestions.length - 1 : index - 1));
-        return;
+    if (option.session_id === null || !option.data) {
+      await startNewSession();
+      setDisplays([]);
+      setTasks([]);
+      setDisplayScroll(0);
+      setTaskScroll(0);
+      appendSystemNote("Started new session");
+    } else {
+      await applySessionChoice(option.session_id, option.data);
+      setDisplays(option.data.history);
+      setTasks(user_data?.categories ?? []);
+      setDisplayScroll(0);
+      setTaskScroll(0);
+      appendSystemNote(`Loaded session ${option.session_id}`);
+    }
+    finishSessionSwitch();
+  };
+
+  const handlePromptSubmit = (value: string) => {
+    const trimmed = completeToSelectedCommand(value.trim());
+    setInputValue("");
+    setSelectedIdx(0);
+    setInputKey((prev) => prev + 1);
+
+    if (command_mode.type === "none" && isModelCommand(trimmed)) {
+      appendSystemNote("/model — choose a model");
+      setCommandMode({ type: "select_model" });
+      setLogoShow(false);
+      return;
+    }
+
+    if (command_mode.type === "none" && isKeyCommand(trimmed)) {
+      appendSystemNote("/key — choose a model to update its API key");
+      setCommandMode({ type: "select_key_model" });
+      setLogoShow(false);
+      return;
+    }
+
+    if (command_mode.type === "none" && isSessionCommand(trimmed)) {
+      appendSystemNote("/session — choose a session");
+      setLogoShow(false);
+      void (async () => {
+        const sessions = await loadSessionOptions();
+        const saved_count = sessions.filter((s) => s.session_id !== null).length;
+        if (saved_count === 0) {
+          appendSystemNote("No saved sessions, starting fresh");
+        }
+        setCommandMode({ type: "select_session", sessions });
+      })();
+      return;
+    }
+
+    if (command_mode.type === "none" && isExitCommand(trimmed)) {
+      void exitApp();
+      return;
+    }
+
+    if (command_mode.type === "none" && isRestartCommand(trimmed)) {
+      void (async () => {
+        await restartConnection();
+        setDisplays([]);
+        setTasks([]);
+        setDisplayScroll(0);
+        setTaskScroll(0);
+        setQuestions([]);
+        setAnswers([]);
+        setCurrentQuestion(0);
+        setQuestionnaireFreeText(false);
+        setQuestionnaireDraft("");
+        setCommandMode({ type: "none" });
+        setLogoShow(true);
+        setInputValue("");
+        setSelectedIdx(0);
+        setInputKey((prev) => prev + 1);
+      })();
+      return;
+    }
+
+    if (command_mode.type === "none" && isSlashCommand(trimmed)) {
+      appendSystemNote(
+        `Unknown command: ${trimmed}. Try /model, /key, /session, /exit, or /restart`,
+      );
+      setLogoShow(false);
+      return;
+    }
+
+    if (trimmed) {
+      emitUserPrompt(trimmed);
+      setDisplays((prev) => [...prev, { role: "user", content: trimmed }]);
+    }
+    setLogoShow(false);
+  };
+
+  const handleQuestionnaireSelect = (value: string) => {
+    if (!questionnaire_active) return;
+    const q = questions[current_question];
+    const updated: QuestionnaireAnswerDTO[] = [...answers, { question: q.question, answer: value }];
+
+    setQuestionnaireFreeText(false);
+    setQuestionnaireDraft("");
+
+    if (current_question + 1 >= questions.length) {
+      emitQuestionnaireAnswers(updated);
+      for (const a of updated) {
+        const entry: DisplayHistoryDTO = {
+          role: "system",
+          content: `${QUESTION_PREFIX}${a.question}\nA: ${a.answer}`,
+        };
+        setDisplays((prev) => [...prev, entry]);
+        saveDisplayHistory(entry);
       }
-      if (key.downArrow) {
-        setCommandIndex((index) => (index >= suggestions.length - 1 ? 0 : index + 1));
-        return;
-      }
-      if (key.tab) {
-        const entry = suggestions[Math.min(command_index, suggestions.length - 1)];
-        if (entry) setInputValue(entry.name);
-        setCommandIndex(0);
-        return;
-      }
-    }
-
-    if (key.escape) {
-      setCommandMode(false);
-      setInputValue("");
-      setCommandIndex(0);
+      setQuestions([]);
+      setAnswers([]);
+      setCurrentQuestion(0);
       return;
     }
 
-    // Scrolling (chat_scroll counts lines scrolled up from the bottom)
-    if (key.pageUp) {
-      setChatScroll((value) => Math.min(max_chat_scroll, value + layout.chat_height));
-      return;
-    }
-    if (key.pageDown) {
-      setChatScroll((value) => Math.max(0, value - layout.chat_height));
-      return;
-    }
-    if (key.home) {
-      setChatScroll(max_chat_scroll);
-      return;
-    }
-    if (key.end) {
-      setChatScroll(0);
-      return;
-    }
-    if (key.upArrow && key.ctrl) {
-      setTaskScroll((value) => Math.max(0, value - 1));
-      return;
-    }
-    if (key.downArrow && key.ctrl) {
-      setTaskScroll((value) => value + 1);
-      return;
-    }
+    setAnswers(updated);
+    setCurrentQuestion((prev) => prev + 1);
+  };
 
-    // Up/Down move the prompt cursor when the draft is multi-line; otherwise
-    // they scroll the chat.
-    const prompt_is_multiline = input_value.includes("\n");
-    if (!prompt_is_multiline && key.upArrow) {
-      setChatScroll((value) => Math.min(max_chat_scroll, value + 1));
-      return;
-    }
-    if (!prompt_is_multiline && key.downArrow) {
-      setChatScroll((value) => Math.max(0, value - 1));
-      return;
-    }
-  });
+  const handleQuestionnaireOther = () => {
+    if (!questionnaire_active) return;
+    setQuestionnaireDraft("");
+    setQuestionnaireFreeText(true);
+  };
 
-  // ── Render ────────────────────────────────────────────────────────────
-  const session_entries = overlay?.kind === "session" ? buildSessionEntries() : [];
+  const handleQuestionnaireDraftSubmit = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    handleQuestionnaireSelect(trimmed);
+  };
 
-  const bottom_controls = (
-    <>
-      {/* Questionnaire overlay */}
-      {questions && (
-        <QuestionnaireBox
-          key={JSON.stringify(questions)}
-          questions={questions}
-          onComplete={handleQuestionnaireComplete}
-        />
-      )}
+  const command_active = command_mode.type !== "none";
 
-      {/* Slash-command overlays */}
-      {overlay?.kind === "model" && (
-        <ModelPicker
-          current_id={model_id}
-          api_keys={getUserData().api_keys}
-          onSelect={handleModelSelect}
-          onCancel={() => setOverlay(null)}
-        />
-      )}
-      {overlay?.kind === "key_select" && (
-        <ModelPicker
-          current_id={model_id}
-          api_keys={getUserData().api_keys}
-          onSelect={handleKeyTargetSelect}
-          onCancel={() => setOverlay(null)}
-        />
-      )}
-      {overlay?.kind === "key" && (
-        <KeyPrompt
-          model_label={getModelLabel(overlay.model_id)}
-          onSubmit={(value) => void handleKeySubmit(value)}
-          onCancel={() => setOverlay(null)}
-        />
-      )}
-      {overlay?.kind === "session" && (
-        <SessionPicker
-          sessions={session_entries}
-          onSelect={(session_id) => void handleSessionSelect(session_id)}
-          onCancel={() => setOverlay(null)}
-        />
-      )}
-
-      {/* Command suggestions */}
-      {!overlay && command_mode && (
-        <CommandOverlay input={input_value} selected_index={command_index} />
-      )}
-
-      {/* Prompt box */}
-      {!overlay && (
-        <PromptBox
-          value={input_value}
-          onChange={handleInputChange}
-          onSubmit={handlePromptSubmit}
-          width={layout.cols - 2}
-          border_color={command_mode ? theme.warning : theme.primary}
-          placeholder="Type a prompt, / for commands (Esc clears)"
-        />
-      )}
-
-      {/* Footer */}
-      <StatusFooter model_id={model_id} />
-    </>
+  const command_overlay = (
+    <CommandOverlay
+      commandMode={command_mode}
+      screenWidth={inner_width}
+      screenHeight={inner_height}
+      onModelSelect={(val) => {
+        void handleModelSelect(val);
+      }}
+      onKeyModelSelect={handleKeyModelSelect}
+      onSessionSelect={(val) => {
+        void handleSessionSelect(val);
+      }}
+      onApiKeySubmit={(val) => {
+        void handleApiKeySubmit(val);
+      }}
+    />
   );
 
-  // Until the backend accepts the connection the prompt and the model/key
-  // overlays must stay reachable — otherwise a missing API key is a dead end.
-  if (!connected) {
+  if (!logo_show) {
     return (
-      <Box flexDirection="column" height={layout.rows - 1}>
-        <LogoView />
-        {error_msg && (
-          <Box paddingX={1}>
-            <Text color="red" bold>
-              ⚠ {error_msg}
-            </Text>
+      <Box
+        flexDirection="row"
+        display="flex"
+        backgroundColor={BG_BLACK}
+        padding={WINDOW_PAD}
+        width={screen_width}
+        height={screen_height}
+      >
+        <Box
+          width={chat_pane_width}
+          height="100%"
+          flexDirection="column"
+          display="flex"
+          marginRight={chat_gap}
+        >
+          <ChatViewport
+            chatBlocks={chat_blocks}
+            displayScroll={display_scroll}
+            viewportRows={display_viewport_rows}
+          />
+          {suggestion_open && (
+            <SuggestionBox commands={command_matches} selectedIndex={selected_idx} />
+          )}
+          {questionnaire_active && (
+            <QuestionnaireBox
+              question={questions[current_question]}
+              current={current_question}
+              total={questions.length}
+              onSelect={handleQuestionnaireSelect}
+              freeText={questionnaire_free_text}
+              onOther={handleQuestionnaireOther}
+            />
+          )}
+          <Box
+            width="100%"
+            height={prompt_box_height}
+            display="flex"
+            flexDirection="column"
+            flexShrink={0}
+          >
+            {questionnaire_active && questionnaire_free_text ? (
+              <PromptBox
+                key={`q-other-${current_question}`}
+                value={questionnaire_draft}
+                onChange={setQuestionnaireDraft}
+                onSubmit={handleQuestionnaireDraftSubmit}
+                placeholder="Type your answer… (Esc to go back)"
+                width={chat_content_width}
+                maxContentRows={prompt_max_rows}
+                bordered={true}
+              />
+            ) : questionnaire_active ? (
+              <Box width="100%" display="flex" backgroundColor={BG_PANEL} paddingX={1} paddingY={1}>
+                <Text dimColor>Answer the question above…</Text>
+              </Box>
+            ) : command_active ? (
+              <Box width="100%" display="flex" backgroundColor={BG_PANEL} paddingX={1} paddingY={1}>
+                <Text dimColor>Esc to cancel…</Text>
+              </Box>
+            ) : (
+              <PromptBox
+                key={input_key}
+                value={input_value}
+                onChange={handleInputChange}
+                onSubmit={handlePromptSubmit}
+                placeholder={PROMPT_PLACEHOLDER}
+                width={chat_content_width}
+                maxContentRows={prompt_max_rows}
+                bordered={true}
+              />
+            )}
           </Box>
+        </Box>
+        {show_task_bar && (
+          <TaskPane
+            taskWindow={task_window}
+            taskScroll={task_scroll}
+            taskGutterWidth={task_gutter_width}
+            width={task_pane_width}
+            cwd={status_cwd}
+            modelLabel={status_model_label}
+          />
         )}
-        {bottom_controls}
+        {command_overlay}
       </Box>
     );
   }
 
   return (
-    <Box flexDirection="column" height={layout.rows - 1}>
-      {/* Error banner */}
-      {error_msg && (
-        <Box>
-          <Text color="red" bold>
-            ⚠ {error_msg}
-          </Text>
-        </Box>
-      )}
-
-      {/* Main two-pane workspace */}
-      <Box flexGrow={1} flexDirection="row">
-        {/* Chat pane */}
-        <Box flexDirection="column" width={layout.chat_width}>
-          <ChatViewport
-            displays={displays}
-            scroll_offset={chat_scroll}
-            height={layout.chat_height}
-            width={layout.chat_width}
-          />
-        </Box>
-
-        {/* Divider */}
-        <Box width={1}>
-          <Text color="gray">│</Text>
-        </Box>
-
-        {/* Tasks pane */}
-        <Box flexDirection="column" flexGrow={1}>
-          <Text bold color="cyan">
-            Tasks
-          </Text>
-          <TaskPane
-            categories={categories}
-            scroll_offset={task_scroll}
-            height={layout.chat_height - 1}
-            width={layout.task_width}
-          />
-        </Box>
-      </Box>
-
-      {bottom_controls}
-    </Box>
+    <LogoView
+      innerWidth={inner_width}
+      logoPromptWidth={logo_prompt_width}
+      promptMaxRows={prompt_max_rows}
+      suggestionOpen={suggestion_open}
+      commandMatches={command_matches}
+      selectedIdx={selected_idx}
+      questionnaireActive={questionnaire_active}
+      question={questions[current_question]}
+      currentQuestion={current_question}
+      totalQuestions={questions.length}
+      questionnaireFreeText={questionnaire_free_text}
+      questionnaireDraft={questionnaire_draft}
+      onQuestionnaireDraftChange={setQuestionnaireDraft}
+      onQuestionnaireSelect={handleQuestionnaireSelect}
+      onQuestionnaireOther={handleQuestionnaireOther}
+      onQuestionnaireDraftSubmit={handleQuestionnaireDraftSubmit}
+      inputKey={input_key}
+      inputValue={input_value}
+      promptPlaceholder={PROMPT_PLACEHOLDER}
+      onInputChange={handleInputChange}
+      onPromptSubmit={handlePromptSubmit}
+      commandOverlay={command_overlay}
+    />
   );
 }

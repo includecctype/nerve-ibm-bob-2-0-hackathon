@@ -1,51 +1,44 @@
-import type { Socket } from "socket.io-client";
-import type { StructuredQuestionDTO, SubagentResponseDTO, TaskUpdatePayload } from "../dto/wire.js";
-import { saveDisplayHistory, saveTaskUpdate, waitForWrites } from "../save/config_store.js";
+import type { DisplayHistoryDTO } from "../dto/wire";
+import { saveDisplayHistory, saveTaskUpdate, writeUserDataToFile } from "../save/config_writer";
+import { socket } from "./client";
+import { emitAgentErrorResponse } from "./emitters";
+import {
+  connection_status_handler,
+  display_handler,
+  error_handler,
+  questionnaire_handler,
+  subagent_response_handler,
+  task_update_handler,
+} from "./handler_registry";
 
-export type OnConnectionStatus = (connected: boolean) => void;
-export type OnMainAgentResponse = (text: string) => void;
-export type OnTaskUpdate = (payload: TaskUpdatePayload) => void;
-export type OnSubagentResponse = (payload: SubagentResponseDTO) => void;
-export type OnQuestionnaire = (questions: StructuredQuestionDTO[]) => void;
-export type OnAgentError = (message: string) => void;
+socket.on("main_agent_response", (data) => {
+  const entry: DisplayHistoryDTO = { role: "assistant", content: data };
+  saveDisplayHistory(entry);
+  display_handler?.(entry);
+});
 
-export interface ListenerCallbacks {
-  onConnectionStatus: OnConnectionStatus;
-  onMainAgentResponse: OnMainAgentResponse;
-  onTaskUpdate: OnTaskUpdate;
-  onSubagentResponse: OnSubagentResponse;
-  onQuestionnaire: OnQuestionnaire;
-  onAgentError: OnAgentError;
-}
+socket.on("task_update", (data) => {
+  saveTaskUpdate(data);
+  task_update_handler?.(data);
+});
 
-export function registerListeners(socket: Socket, cb: ListenerCallbacks): void {
-  socket.on("connection_status", (connected: boolean) => {
-    cb.onConnectionStatus(connected);
-  });
+socket.on("subagent_response", (data) => {
+  subagent_response_handler?.(data);
+});
 
-  socket.on("main_agent_response", (text: string) => {
-    saveDisplayHistory({ role: "assistant", content: text });
-    cb.onMainAgentResponse(text);
-  });
+socket.on("connection_status", (data) => {
+  connection_status_handler?.(data);
+});
 
-  socket.on("task_update", (payload: TaskUpdatePayload) => {
-    saveTaskUpdate(payload.categories);
-    cb.onTaskUpdate(payload);
-  });
+socket.on("questionnaire", (data) => {
+  questionnaire_handler?.(data);
+});
 
-  socket.on("subagent_response", (payload: SubagentResponseDTO) => {
-    cb.onSubagentResponse(payload);
-  });
+socket.on("agent_error", (data: string) => {
+  error_handler?.(data);
+  emitAgentErrorResponse(data);
+});
 
-  socket.on("questionnaire", (questions: StructuredQuestionDTO[]) => {
-    cb.onQuestionnaire(questions);
-  });
-
-  socket.on("agent_error", (message: string) => {
-    cb.onAgentError(message);
-  });
-
-  socket.on("disconnect", async () => {
-    await waitForWrites();
-  });
-}
+socket.on("disconnect", async () => {
+  await writeUserDataToFile();
+});

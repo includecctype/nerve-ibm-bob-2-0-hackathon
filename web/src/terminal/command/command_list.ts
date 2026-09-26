@@ -15,3 +15,11 @@ export function filterCommands(input: string): CommandEntry[] {
   if (!input.startsWith("/")) return [];
   return COMMANDS.filter((entry) => entry.name.startsWith(input));
 }
+
+export function isCommand(input: string, name: string): boolean {
+  return input.trim() === name;
+}
+
+export function isSlashCommand(input: string): boolean {
+  return input.trim().startsWith("/");
+}

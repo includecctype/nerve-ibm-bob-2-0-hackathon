@@ -1,7 +1,8 @@
 import { Box, type Key, Text, useInput } from "ink";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { isPasteActive, notePasteMarker } from "../hooks/use_bracketed_paste.js";
-import { wrapLines } from "./text_window.js";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isPasteActive, notePasteMarker } from "../hooks/use_bracketed_paste";
+import { wrapLines } from "./text_window";
+import { BG_PANEL } from "./theme";
 
 const MAX_PROMPT_CONTENT_ROWS = 5;
 
@@ -49,7 +50,6 @@ type PromptBoxProps = {
   width: number;
   maxContentRows?: number;
   bordered?: boolean;
-  border_color?: string;
 };
 
 type CursorMetrics = {
@@ -100,6 +100,9 @@ function prefixLineCount(value: string, offset: number, width: number): number {
   return prefix ? wrapLines(prefix, width).length : 1;
 }
 
+// The prefix line count is monotonically non-decreasing in `offset`, so the first
+// offset on a given visual line can be found with a binary search instead of
+// re-wrapping every prefix (which was O(n^2) per keypress on long drafts).
 function firstOffsetBeyondLine(value: string, line_index: number, width: number): number {
   let lo = 0;
   let hi = value.length + 1;
@@ -175,7 +178,6 @@ export function PromptBox({
   width,
   maxContentRows = MAX_PROMPT_CONTENT_ROWS,
   bordered = true,
-  border_color = "cyan",
 }: PromptBoxProps) {
   const [cursor_offset, setCursorOffset] = useState(() => value.length);
 
@@ -355,10 +357,18 @@ export function PromptBox({
     ) : null;
 
   const outer_width = Math.max(3, width + 2);
+  const outer_height = height + (indicator ? 1 : 0);
 
   if (!bordered) {
     return (
-      <Box width={outer_width} flexDirection="column" display="flex" paddingX={1}>
+      <Box
+        width={outer_width}
+        flexDirection="column"
+        display="flex"
+        backgroundColor={BG_PANEL}
+        paddingX={1}
+        paddingY={1}
+      >
         {body}
         {indicator}
       </Box>
@@ -368,15 +378,17 @@ export function PromptBox({
   return (
     <Box
       width={outer_width}
-      height={height}
+      height={outer_height}
       display="flex"
       flexDirection="column"
       flexShrink={0}
-      borderStyle="round"
-      borderColor={border_color}
     >
-      {body}
-      {indicator}
+      <Box width="100%" display="flex" backgroundColor={BG_PANEL} paddingX={1} paddingY={1}>
+        <Box flexDirection="column" display="flex" width="100%">
+          {body}
+          {indicator}
+        </Box>
+      </Box>
     </Box>
   );
 }

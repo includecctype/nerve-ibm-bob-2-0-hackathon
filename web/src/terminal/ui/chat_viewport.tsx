@@ -1,34 +1,52 @@
 import { Box, Text } from "ink";
-import React from "react";
-import type { DisplayHistoryDTO } from "../dto/wire.js";
-import { chatRows, windowFromBottom } from "./text_window.js";
-import { theme } from "./theme.js";
+import type { GroupedDisplayBlock } from "./text_window";
+import { entryPanelBg, roleColor } from "./theme";
 
-interface ChatViewportProps {
-  displays: DisplayHistoryDTO[];
-  /** Rows scrolled up from the newest message; 0 keeps the view pinned to the bottom. */
-  scroll_offset: number;
-  height: number;
-  width: number;
-}
+type ChatViewportProps = {
+  chatBlocks: GroupedDisplayBlock[];
+  displayScroll: number;
+  viewportRows: number;
+};
 
-export function ChatViewport({ displays, scroll_offset, height, width }: ChatViewportProps) {
-  const rows = chatRows(displays, width);
-  const { visible, startIndex } = windowFromBottom(rows, height, scroll_offset);
-
+export function ChatViewport({ chatBlocks, displayScroll, viewportRows }: ChatViewportProps) {
   return (
-    <Box flexDirection="column" height={height} overflow="hidden">
-      {visible.length > 0 ? (
-        visible.map((row, index) => {
-          const color = row.role === "user" ? theme.primary : "white";
-          return (
-            <Text key={`row-${startIndex + index}`} color={color}>
-              {row.is_pad ? " " : row.text}
-            </Text>
-          );
-        })
+    <Box
+      width="100%"
+      height={viewportRows}
+      flexDirection="column"
+      display="flex"
+      paddingX={1}
+      justifyContent="flex-end"
+      overflow="hidden"
+      flexShrink={0}
+      marginBottom={1}
+    >
+      {displayScroll > 0 && (
+        <Text dimColor wrap="truncate">
+          — scrolled up ({displayScroll} lines, End for live) —
+        </Text>
+      )}
+      {chatBlocks.length === 0 ? (
+        <Text dimColor>No messages yet</Text>
       ) : (
-        <Text color={theme.muted}>No messages yet.</Text>
+        chatBlocks.map((block) => (
+          <Box
+            key={block.entryIndex}
+            width="100%"
+            display="flex"
+            flexDirection="column"
+            paddingTop={block.paddingTop}
+            paddingBottom={block.paddingBottom}
+            paddingX={1}
+            backgroundColor={entryPanelBg(block.role, block.content)}
+          >
+            {block.lines.map((line) => (
+              <Text key={line.lineIndex} color={roleColor(block.role)}>
+                {line.text}
+              </Text>
+            ))}
+          </Box>
+        ))
       )}
     </Box>
   );

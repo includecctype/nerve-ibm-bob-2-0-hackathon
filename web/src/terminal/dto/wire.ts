@@ -1,58 +1,59 @@
+export type QuestionnaireAnswerDTO = {
+  question: string;
+  answer: string;
+};
+
+export type StructuredQuestionDTO = {
+  question: string;
+  options: string[];
+};
+
 export type TaskItemStatus = "pending" | "running" | "done" | "failed";
 export type TaskCategoryStatus = "pending" | "running" | "done" | "failed" | "blocked";
 
-export interface TaskItemDTO {
+export type TaskItemDTO = {
   description: string;
   status: TaskItemStatus;
   result: string;
-}
+};
 
-export interface TaskCategoryDTO {
+export type TaskCategoryDTO = {
   name: string;
   status: TaskCategoryStatus;
   depends_on: string[];
   tasks: TaskItemDTO[];
-}
+};
 
-export interface TaskUpdatePayload {
+export type TaskUpdatePayload = {
   categories: TaskCategoryDTO[];
-}
+};
 
-export interface DisplayHistoryDTO {
+export type DisplayHistoryDTO = {
   role: string;
   content: string;
-}
+};
 
-export interface StructuredQuestionDTO {
-  question: string;
-  options: string[];
-}
-
-export interface QuestionnaireAnswerDTO {
-  question: string;
-  answer: string;
-}
-
-export interface SubagentResponseDTO {
+export type SubagentResponseDTO = {
   category: string;
   status: "done" | "failed";
   report: string;
-}
+};
 
-export interface ToolRequestDTO {
+// Backend forwards file/shell tool calls here; they run on this machine.
+export type ToolRequestDTO = {
   id: string;
   tool: string;
   args: Record<string, unknown>;
-}
+};
 
-export interface ToolResultDTO {
+export type ToolResultDTO = {
   id: string;
   ok: boolean;
   output: string;
-}
+};
 
-export interface SessionData {
+export type SessionData = {
   categories: TaskCategoryDTO[];
   history: DisplayHistoryDTO[];
   last_updated?: number;
-}
+};
