@@ -57,6 +57,7 @@
   grid-area: terminal;
   display: flex;
   min-height: 0;
+  border-top: 1px solid var(--border);
 }
 
 .ide-terminal > div {
