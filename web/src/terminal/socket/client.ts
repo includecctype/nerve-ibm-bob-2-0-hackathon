@@ -1,62 +1,48 @@
-import { type Socket, io } from "socket.io-client";
-import { getUserData } from "../session/user_data.js";
+import { io, type Socket } from "socket.io-client";
+import { user_data } from "../session/user_data";
 
-const NERVE_BACKEND_URL =
+export const BACKEND_URL =
   import.meta.env.NERVE_BACKEND_URL ??
   import.meta.env.VITE_NERVE_BACKEND_URL ??
   "http://localhost:8000";
 
-let socket_instance: Socket | null = null;
+// The socket instance is created once and reused across reconnects; socket.io
+// re-runs `auth` on every (re)connect, so fresh credentials and session state
+// are always sent.
+export const socket: Socket = io(BACKEND_URL, {
+  autoConnect: false,
+  auth: (cb) =>
+    cb({
+      client_kind: "web",
+      api_keys: user_data?.api_keys ?? {},
+      main_agent_id: user_data?.main_agent_id ?? 1,
+      categories: user_data?.categories ?? [],
+      history: user_data?.history ?? [],
+      api_key: user_data ? (user_data.api_keys[user_data.main_agent_id] ?? "") : "",
+    }),
+});
+
 const socket_observers = new Set<(socket: Socket) => void>();
 
 export function getSocket(): Socket {
-  if (!socket_instance) {
-    throw new Error("Socket not initialized — call connectSocket() first");
-  }
-  return socket_instance;
+  return socket;
 }
 
-// Lets other modules (e.g. the storage client) react to new socket instances,
-// which are recreated on every reconnect.
 export function observeSocket(observer: (socket: Socket) => void): () => void {
   socket_observers.add(observer);
-  if (socket_instance) {
-    observer(socket_instance);
-  }
+  observer(socket);
   return () => {
     socket_observers.delete(observer);
   };
 }
 
-export function connectSocket(): Socket {
-  if (socket_instance) {
-    socket_instance.disconnect();
+export function connectSocket(): void {
+  if (socket.connected) {
+    socket.disconnect();
   }
-
-  const socket = io(NERVE_BACKEND_URL, {
-    // Re-evaluated on every (re)connect so fresh credentials and session state
-    // are always sent; the default transports keep the HTTP polling fallback.
-    auth: (cb) => {
-      const data = getUserData();
-      cb({
-        client_kind: "web",
-        api_keys: data.api_keys,
-        api_key: data.api_keys[String(data.main_agent_id)] ?? "",
-        main_agent_id: data.main_agent_id,
-        categories: data.categories,
-        history: data.history,
-      });
-    },
-  });
-
-  socket_instance = socket;
-  for (const observer of socket_observers) {
-    observer(socket);
-  }
-  return socket;
+  socket.connect();
 }
 
 export function disconnectSocket(): void {
-  socket_instance?.disconnect();
-  socket_instance = null;
+  socket.disconnect();
 }

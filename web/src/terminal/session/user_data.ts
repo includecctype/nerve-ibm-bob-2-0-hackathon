@@ -1,33 +1,20 @@
-import type { DisplayHistoryDTO, TaskCategoryDTO } from "../dto/wire.js";
+import type { SessionData } from "../dto/wire";
 
-export interface UserData {
-  api_keys: Record<string, string>;
+export type UserData = {
+  api_keys: Record<number, string>;
   main_agent_id: number;
   session_id: string;
-  categories: TaskCategoryDTO[];
-  history: DisplayHistoryDTO[];
-  last_user_request: string;
-  committed: boolean;
-}
-
-let user_data: UserData = {
-  api_keys: {},
-  main_agent_id: 1,
-  session_id: crypto.randomUUID(),
-  categories: [],
-  history: [],
-  last_user_request: "",
-  committed: false,
+  session_committed: boolean;
+  categories: SessionData["categories"];
+  history: SessionData["history"];
 };
 
-export function getUserData(): UserData {
-  return user_data;
+export let user_data: UserData | null = null;
+
+export function setUserData(data: UserData) {
+  user_data = data;
 }
 
-export function setUserData(data: Partial<UserData>): void {
-  user_data = { ...user_data, ...data };
-}
-
-export function commitSession(): void {
-  user_data.committed = true;
+export function commitSession() {
+  if (user_data) user_data.session_committed = true;
 }

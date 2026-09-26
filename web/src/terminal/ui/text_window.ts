@@ -1,15 +1,39 @@
 import wrapAnsi from "wrap-ansi";
 
-/**
- * Wrap text to a given column width, preserving ANSI escape codes.
- */
-export function wrapText(text: string, width: number): string {
-  return wrapAnsi(text, width, { hard: true, trim: false });
-}
+type DisplayEntryBlock = {
+  entryIndex: number;
+  role: string;
+  content: string;
+  lines: string[];
+};
 
-/**
- * Wrap text to a given column width and return the individual display lines.
- */
+type DisplayRow =
+  | {
+      kind: "pad";
+      entryIndex: number;
+      role: string;
+      content: string;
+    }
+  | {
+      kind: "text";
+      entryIndex: number;
+      role: string;
+      content: string;
+      lineIndex: number;
+      text: string;
+    };
+
+export type GroupedDisplayBlock = {
+  entryIndex: number;
+  role: string;
+  content: string;
+  paddingTop: number;
+  paddingBottom: number;
+  lines: { lineIndex: number; text: string }[];
+};
+
+const DISPLAY_ENTRY_PAD = 1;
+
 export function wrapLines(text: string, width: number): string[] {
   if (width < 1) {
     return [text];
@@ -17,33 +41,96 @@ export function wrapLines(text: string, width: number): string[] {
   return wrapAnsi(text, width, { hard: true, trim: false }).split("\n");
 }
 
-/**
- * Truncate text to the last `max_lines` lines.
- */
-export function truncateToLines(text: string, max_lines: number): string {
-  const lines = text.split("\n");
-  return lines.slice(Math.max(0, lines.length - max_lines)).join("\n");
+export function flattenDisplayEntries(
+  entries: { role: string; content: string }[],
+  width: number,
+): DisplayEntryBlock[] {
+  return entries.map((entry, entryIndex) => {
+    const prefix =
+      entry.role === "user"
+        ? "You: "
+        : entry.role === "system" || entry.role === "error"
+          ? ""
+          : "Agent: ";
+    const wrapped = wrapLines(`${prefix}${entry.content}`, width);
+    return {
+      entryIndex,
+      role: entry.role,
+      content: entry.content,
+      lines: wrapped,
+    };
+  });
 }
 
-export type ChatRow = { role: string; text: string; is_pad: boolean };
-
-/**
- * Expand the display history into wrapped terminal rows (one blank row between
- * messages) so the viewport can scroll in visual rows rather than messages.
- */
-export function chatRows(entries: { role: string; content: string }[], width: number): ChatRow[] {
-  const rows: ChatRow[] = [];
-  const safe_width = Math.max(1, width);
-  entries.forEach((entry, index) => {
-    const prefix = entry.role === "user" ? "> " : "  ";
-    for (const line of wrapLines(`${prefix}${entry.content}`, safe_width)) {
-      rows.push({ role: entry.role, text: line, is_pad: false });
+export function displayRowsFromEntries(blocks: DisplayEntryBlock[]): DisplayRow[] {
+  const rows: DisplayRow[] = [];
+  for (const block of blocks) {
+    for (let pad = 0; pad < DISPLAY_ENTRY_PAD; pad++) {
+      rows.push({
+        kind: "pad",
+        entryIndex: block.entryIndex,
+        role: block.role,
+        content: block.content,
+      });
     }
-    if (index < entries.length - 1) {
-      rows.push({ role: entry.role, text: "", is_pad: true });
+    block.lines.forEach((text, lineIndex) => {
+      rows.push({
+        kind: "text",
+        entryIndex: block.entryIndex,
+        role: block.role,
+        content: block.content,
+        lineIndex,
+        text,
+      });
+    });
+    for (let pad = 0; pad < DISPLAY_ENTRY_PAD; pad++) {
+      rows.push({
+        kind: "pad",
+        entryIndex: block.entryIndex,
+        role: block.role,
+        content: block.content,
+      });
     }
-  });
+  }
   return rows;
+}
+
+export function groupRowsIntoBlocks(rows: DisplayRow[]): GroupedDisplayBlock[] {
+  const groups: GroupedDisplayBlock[] = [];
+  let current: GroupedDisplayBlock | null = null;
+
+  const flush = () => {
+    if (current) {
+      groups.push(current);
+      current = null;
+    }
+  };
+
+  for (const row of rows) {
+    if (!current || current.entryIndex !== row.entryIndex) {
+      flush();
+      current = {
+        entryIndex: row.entryIndex,
+        role: row.role,
+        content: row.content,
+        paddingTop: 0,
+        paddingBottom: 0,
+        lines: [],
+      };
+    }
+    if (row.kind === "pad") {
+      if (current.lines.length === 0) {
+        current.paddingTop += 1;
+      } else {
+        current.paddingBottom += 1;
+      }
+    } else {
+      current.lines.push({ lineIndex: row.lineIndex, text: row.text });
+      current.paddingBottom = 0;
+    }
+  }
+  flush();
+  return groups;
 }
 
 export function windowFromBottom<T>(

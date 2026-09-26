@@ -1,17 +1,9 @@
-export interface ModelOption {
-  id: number;
-  label: string;
-  provider: string;
-}
+import type { ModelOption } from "../dto/model";
 
 export const MODEL_OPTIONS: ModelOption[] = [
-  { id: 1, label: "OpenRouter Auto", provider: "openrouter" },
-  { id: 2, label: "Groq GPT-OSS 120B", provider: "groq" },
-  { id: 3, label: "Claude Fable 5", provider: "anthropic" },
-  { id: 4, label: "Kimi K2.6", provider: "baseten" },
-  { id: 5, label: "DeepSeek Chat", provider: "deepseek" },
+  { id: 1, label: "OpenRouter Auto" },
+  { id: 2, label: "Groq GPT-OSS 120B" },
+  { id: 3, label: "Claude Fable 5" },
+  { id: 4, label: "Kimi K2.6" },
+  { id: 5, label: "DeepSeek Chat" },
 ];
-
-export function getModelLabel(id: number): string {
-  return MODEL_OPTIONS.find((m) => m.id === id)?.label ?? `Model ${id}`;
-}
