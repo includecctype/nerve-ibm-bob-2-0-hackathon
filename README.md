@@ -8,8 +8,10 @@ dependencies are finished; tasks inside a category run sequentially. The graph
 survives across prompts, so a new prompt **morphs** pending work instead of
 re-planning from scratch, and running work is never mutated.
 
-File and shell tools are **forwarded to the CLI** and executed on your machine —
-the backend never touches your working directory.
+In the terminal client, file and shell tools are **forwarded to the CLI** and
+executed on your machine — the backend never touches your working directory. In
+the web workspace they run on the backend against the session's OCI Object
+Storage folder instead.
 
 ## Repository layout
 
@@ -17,9 +19,11 @@ the backend never touches your working directory.
 |---|---|
 | `backend/` | Python 3.13 Socket.IO gateway (`python-socketio` + uvicorn), LangChain/LangGraph agents, DAG scheduler |
 | `terminal/` | Node 22 + pnpm CLI (Ink/React) — the two-pane TUI |
+| `web/` | Vite + React browser workspace: Ink via ink-web, plus an OCI file explorer and viewer |
 | `docker-compose.yml` | Runs the backend on `:8000` with a healthcheck |
-| `justfile` | Shortcuts for backend, CLI, and Docker |
-| `.github/workflows/ci.yml` | Lint / format / typecheck / security checks |
+| `justfile` | Shortcuts for backend, CLI, web, and Docker |
+| `.github/workflows/ci.yml` | Lint / format / typecheck / build / security checks |
+| `.github/workflows/web-pages.yml` | Publishes `web/dist` to GitHub Pages |
 | `AGENTS.md`, `.opencode/`, `.bob/` | Agent working agreement and rules (see below) |
 
 ## Quickstart
@@ -124,6 +128,55 @@ Ambiguous prompts come back as a **questionnaire**: 2–5 options plus a write-i
 **Persistence** — API keys, the task graph, and display history are written to
 `./user_config/config.json` (git-ignored), debounced, and flushed on exit.
 
+## Web workspace
+
+`web/` is a static SPA that renders the same Ink UI through
+[ink-web](https://ink-web.dev) and adds two cloud-backed panes:
+
+```
+┌───────────┬───────────────┬──────────────┐
+│ terminal  │ file explorer │ file viewer  │
+└───────────┴───────────────┴──────────────┘
+```
+
+Each visit creates a fresh `YYYY-MM-DD:<uuid>` folder in OCI Object Storage. The
+backend owns the OCI credentials and performs every read and write; the web
+client asks for a listing or a file over Socket.IO, and the agent's file tools
+run server-side against that same folder, so files appear in the explorer as the
+agent writes them.
+
+```bash
+# backend (needs OCI credentials, see below)
+cd backend && uv sync --all-extras && uv run main.py
+
+# web workspace
+cd web && pnpm install
+VITE_NERVE_BACKEND_URL=http://localhost:8000 pnpm dev
+```
+
+### OCI setup
+
+1. Create a bucket in OCI Object Storage.
+2. Provide an OCI API-key config at `~/.oci/config` (or point
+   `OCI_CONFIG_FILE` / `OCI_CONFIG_PROFILE` at one) with an `object-family`
+   policy.
+3. Set `OCI_NAMESPACE` and `OCI_BUCKET` in the root `.env`.
+
+Without OCI credentials the terminal still works; the explorer and viewer show a
+clear error until the bucket is configured.
+
+### Hosting the web workspace
+
+```bash
+cd web && pnpm build     # → web/dist (relative asset paths)
+```
+
+Upload `web/dist` to any static host (GitHub Pages, Hostinger, ...). The backend
+must be reachable, and its `WEB_ALLOWED_ORIGINS` should include the web origin.
+`.github/workflows/web-pages.yml` deploys `web/dist` to GitHub Pages on pushes
+that touch `web/`; set the `VITE_NERVE_BACKEND_URL` repository variable and
+enable Pages with the "GitHub Actions" source first.
+
 ## Environment variables
 
 | Variable | Read by | Purpose |
@@ -135,10 +188,11 @@ Ambiguous prompts come back as a **questionnaire**: 2–5 options plus a write-i
 | `OCI_BUCKET` | backend (`backend/storage/oci/oci_client.py`) | bucket that holds the web session folders |
 | `OCI_CONFIG_FILE` | backend (`backend/storage/oci/oci_client.py`) | OCI API-key config path; defaults to `~/.oci/config` |
 | `OCI_CONFIG_PROFILE` | backend (`backend/storage/oci/oci_client.py`) | OCI config profile; defaults to `DEFAULT` |
+| `VITE_NERVE_BACKEND_URL` | web (`web/src/terminal/socket/client.ts`) | gateway URL baked into the browser build; defaults to the public deployment |
 
-`.env` is git-ignored; `.env.example` lists the keys with blank values. OCI
-region and API keys are read from `~/.oci/config`, so only the namespace and
-bucket need to be set.
+`.env` and `web/.env` are git-ignored; `.env.example` and `web/.env.example`
+list the keys with blank values. OCI region and API keys are read from
+`~/.oci/config`, so only the namespace and bucket need to be set.
 
 ## Checks
 
@@ -146,12 +200,14 @@ Run locally (CI runs the same set on every PR):
 
 ```bash
 cd terminal && pnpm lint && pnpm format:check && pnpm typecheck
+cd web      && pnpm lint && pnpm format:check && pnpm typecheck && pnpm build
 cd backend  && uv sync --all-extras && uv run ruff check . && uv run black --check . && uv run bandit -r . -c pyproject.toml
 ```
 
 | CI job | Command |
 |---|---|
 | Terminal Lint / Format / Typecheck | `pnpm lint` / `pnpm format:check` / `pnpm typecheck` |
+| Web Lint / Format / Typecheck / Build | `pnpm lint` / `pnpm format:check` / `pnpm typecheck` / `pnpm build` |
 | Backend Lint / Format / Security | `ruff check .` / `black --check .` / `bandit -r . -c pyproject.toml` |
 | Secret Scan | `gitleaks` (allowlist: `.env.example`) |
 
