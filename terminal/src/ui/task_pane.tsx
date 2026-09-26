@@ -1,13 +1,20 @@
 import { Box, Text } from "ink";
 import React from "react";
 import type { TaskCategoryDTO } from "../dto/wire.js";
+import { wrapLines, windowFromTop } from "./text_window.js";
 import { theme } from "./theme.js";
 
 interface TaskPaneProps {
   categories: TaskCategoryDTO[];
   scroll_offset: number;
   height: number;
+  width: number;
 }
+
+type TaskRow = {
+  text: string;
+  color: string;
+};
 
 function categoryIcon(status: TaskCategoryDTO["status"]): string {
   switch (status) {
@@ -39,47 +46,48 @@ function categoryColor(status: TaskCategoryDTO["status"]): string {
   }
 }
 
-export function TaskPane({ categories, scroll_offset, height }: TaskPaneProps) {
-  const lines: React.ReactElement[] = [];
+function taskColor(status: string): string {
+  switch (status) {
+    case "running":
+      return theme.running;
+    case "done":
+      return theme.success;
+    case "failed":
+      return theme.error;
+    default:
+      return theme.muted;
+  }
+}
+
+export function TaskPane({ categories, scroll_offset, height, width }: TaskPaneProps) {
+  const rows: TaskRow[] = [];
+  const safe_width = Math.max(1, width);
 
   for (const cat of categories) {
     const icon = categoryIcon(cat.status);
     const color = categoryColor(cat.status);
     const waits = cat.depends_on.length > 0 ? ` (waits: ${cat.depends_on.join(", ")})` : "";
-
-    lines.push(
-      <Text key={`cat-${cat.name}`} color={color}>
-        {icon} {cat.name}
-        {waits}
-      </Text>,
-    );
+    for (const line of wrapLines(`${icon} ${cat.name}${waits}`, safe_width)) {
+      rows.push({ text: line, color });
+    }
 
     for (const task of cat.tasks) {
-      const task_color =
-        task.status === "running"
-          ? theme.running
-          : task.status === "done"
-            ? theme.success
-            : task.status === "failed"
-              ? theme.error
-              : theme.muted;
       const spinner = task.status === "running" ? " ⠿" : "";
-      lines.push(
-        <Text key={`task-${cat.name}-${task.description}`} color={task_color}>
-          {"  "}
-          {task.description}
-          {spinner}
-        </Text>,
-      );
+      for (const line of wrapLines(`  ${task.description}${spinner}`, safe_width)) {
+        rows.push({ text: line, color: taskColor(task.status) });
+      }
     }
   }
 
-  const start = Math.min(scroll_offset, Math.max(lines.length - height, 0));
-  const visible = lines.slice(start, start + height);
+  const { visible, startIndex } = windowFromTop(rows, height, scroll_offset);
 
   return (
     <Box flexDirection="column" height={height} overflow="hidden">
-      {visible}
+      {visible.map((row, index) => (
+        <Text key={`task-row-${startIndex + index}`} color={row.color}>
+          {row.text}
+        </Text>
+      ))}
     </Box>
   );
 }

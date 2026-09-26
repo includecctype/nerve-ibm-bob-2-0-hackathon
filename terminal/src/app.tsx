@@ -32,6 +32,7 @@ import { LogoView } from "./ui/logo_view.js";
 import { PromptBox } from "./ui/prompt_box.js";
 import { StatusFooter } from "./ui/status_footer.js";
 import { TaskPane } from "./ui/task_pane.js";
+import { chatRows } from "./ui/text_window.js";
 import { theme } from "./ui/theme.js";
 
 // ── Bootstrap ──────────────────────────────────────────────────────────────
@@ -275,9 +276,10 @@ function App() {
     emitUserPrompt(text);
   };
 
-  // chat_scroll counts lines scrolled up from the newest message: 0 is pinned
-  // to the bottom, so new messages appear without touching the scroll state.
-  const max_chat_scroll = Math.max(displays.length - layout.chat_height, 0);
+  // chat_scroll counts wrapped terminal rows up from the newest message: 0 is
+  // pinned to the bottom, so new messages appear without touching the state.
+  const chat_row_count = chatRows(displays, layout.chat_width).length;
+  const max_chat_scroll = Math.max(0, chat_row_count - layout.chat_height);
 
   const handleInputChange = (value: string) => {
     setInputValue(value);
@@ -327,13 +329,11 @@ function App() {
 
     // Scrolling (chat_scroll counts lines scrolled up from the bottom)
     if (key.pageUp) {
-      setChatScroll((value) =>
-        Math.min(max_chat_scroll, value + Math.floor(layout.chat_height / 2)),
-      );
+      setChatScroll((value) => Math.min(max_chat_scroll, value + layout.chat_height));
       return;
     }
     if (key.pageDown) {
-      setChatScroll((value) => Math.max(0, value - Math.floor(layout.chat_height / 2)));
+      setChatScroll((value) => Math.max(0, value - layout.chat_height));
       return;
     }
     if (key.home) {
@@ -487,6 +487,7 @@ function App() {
             categories={categories}
             scroll_offset={task_scroll}
             height={layout.chat_height - 1}
+            width={layout.task_width}
           />
         </Box>
       </Box>
