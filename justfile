@@ -31,6 +31,14 @@ backend:
 frontend:
 	doppler run --project {{doppler_project}} --config {{doppler_config}} -- sh -c "cd terminal && pnpm install --frozen-lockfile && pnpm dev"
 
+# Install dependencies and start the web workspace
+web:
+	doppler run --project {{doppler_project}} --config {{doppler_config}} -- sh -c "cd web && pnpm install --frozen-lockfile && pnpm dev"
+
+# Build the web workspace for a static host
+web-build:
+	cd web && pnpm install --frozen-lockfile && pnpm build
+
 # Start the backend in docker, then the terminal client
 run: docker-up
 	just frontend
