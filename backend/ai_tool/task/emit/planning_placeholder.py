@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from ai_tool.task.task_models import TERMINAL_STATUSES, TaskCategory
 
+PLANNING_CATEGORY_NAME = "planning"
 PLANNING_DESCRIPTION = "Planning your request…"
 
 
@@ -15,14 +16,15 @@ async def emitPlanningPlaceholder(sid: str, real_categories: list[TaskCategory])
     from gateway.config import sio
 
     placeholder = {
-        "name": "planning",
-        "status": "running",
+        "name": PLANNING_CATEGORY_NAME,
+        "status": "pending",
         "depends_on": [],
-        "tasks": [{"description": PLANNING_DESCRIPTION, "status": "running", "result": ""}],
+        "tasks": [{"description": PLANNING_DESCRIPTION, "status": "pending", "result": ""}],
     }
 
+    # The real graph is listed first; the transient placeholder trails it.
     wire_cats = _sessionCategoriesToWire(real_categories)
-    payload = {"categories": [placeholder] + wire_cats}
+    payload = {"categories": wire_cats + [placeholder]}
 
     await sio.emit("task_update", payload, to=sid)
 
