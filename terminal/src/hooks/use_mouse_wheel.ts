@@ -1,61 +1,75 @@
-import { useEffect } from "react";
+import { useStdin, useStdout } from "ink";
+import { useEffect, useRef } from "react";
 
-export interface WheelEvent {
-  direction: "up" | "down";
-  column: number;
-  row: number;
-}
+const ESC = String.fromCharCode(27);
+const MOUSE_PREFIX = `${ESC}[<`;
 
-export interface MouseEvent {
-  button: number;
-  column: number;
-  row: number;
-}
+const ENABLE_MOUSE = `${ESC}[?1000h${ESC}[?1006h`;
+const DISABLE_MOUSE = `${ESC}[?1000l${ESC}[?1006l`;
 
-// SGR mouse reporting arrives as: ESC [ < button ; column ; row M|m
-// Ink strips the leading ESC before the string reaches `useInput`.
-const MOUSE_PATTERN = /^\[<(\d+);(\d+);(\d+)[Mm]/;
+export type WheelDirection = "up" | "down";
 
-const WHEEL_UP_BUTTON = 64;
-const WHEEL_DOWN_BUTTON = 65;
-
-export function parseMouseEvent(input: string): MouseEvent | null {
-  const match = MOUSE_PATTERN.exec(input);
-  if (!match) return null;
-  return {
-    button: Number(match[1]),
-    column: Number(match[2]),
-    row: Number(match[3]),
-  };
-}
-
-export function parseWheelEvent(input: string): WheelEvent | null {
-  const event = parseMouseEvent(input);
-  if (!event) return null;
-  if (event.button !== WHEEL_UP_BUTTON && event.button !== WHEEL_DOWN_BUTTON) {
-    return null;
-  }
-  return {
-    direction: event.button === WHEEL_UP_BUTTON ? "up" : "down",
-    column: event.column,
-    row: event.row,
-  };
-}
-
-export function isMouseEvent(input: string): boolean {
-  return parseMouseEvent(input) !== null;
+function parseMouseSgr(input: string): { button: number; x: number; y: number } | null {
+  if (!input.startsWith(MOUSE_PREFIX)) return null;
+  const last = input.at(-1);
+  if (last !== "M" && last !== "m") return null;
+  const parts = input.slice(MOUSE_PREFIX.length, -1).split(";");
+  if (parts.length !== 3) return null;
+  const button = Number(parts[0]);
+  const x = Number(parts[1]);
+  const y = Number(parts[2]);
+  if (!Number.isFinite(button) || !Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return { button, x, y };
 }
 
 /**
- * Turns on SGR mouse reporting so wheel events reach `useInput`, and restores
- * the terminal when the app unmounts.
+ * Enables terminal SGR mouse reporting and reports wheel events to `on_wheel`.
+ * Mouse sequences are swallowed on Ink's shared input emitter so overlays and
+ * text inputs never receive the raw escape bytes.
  */
-export function useMouseTracking(): void {
+export function useMouseWheel(
+  enabled: boolean,
+  on_wheel: (direction: WheelDirection, x: number, y: number) => void,
+): void {
+  const { stdout } = useStdout();
+  const { internal_eventEmitter } = useStdin();
+  const on_wheel_ref = useRef(on_wheel);
+  on_wheel_ref.current = on_wheel;
+
   useEffect(() => {
-    if (!process.stdout.isTTY) return;
-    process.stdout.write("\u001b[?1000h\u001b[?1006h");
-    return () => {
-      process.stdout.write("\u001b[?1000l\u001b[?1006l");
+    if (!enabled || !internal_eventEmitter) {
+      return;
+    }
+
+    stdout.write(ENABLE_MOUSE);
+
+    const original_emit = internal_eventEmitter.emit.bind(internal_eventEmitter);
+    const patched_emit = (event: string | symbol, ...args: unknown[]) => {
+      if (event === "input" && typeof args[0] === "string") {
+        const match = parseMouseSgr(args[0]);
+        if (match) {
+          if ((match.button & 64) !== 0) {
+            const direction: WheelDirection = (match.button & 1) === 0 ? "up" : "down";
+            on_wheel_ref.current(direction, match.x, match.y);
+          }
+          return true;
+        }
+      }
+      return original_emit(event, ...args);
     };
-  }, []);
+    internal_eventEmitter.emit = patched_emit;
+
+    return () => {
+      stdout.write(DISABLE_MOUSE);
+      internal_eventEmitter.emit = original_emit;
+    };
+  }, [enabled, internal_eventEmitter, stdout]);
+}
+
+// Fallback for a non-patched emitter: Ink strips the leading ESC before the
+// string reaches `useInput`, so match the remaining `[<` form here.
+const MOUSE_PATTERN = /^\[<(\d+);(\d+);(\d+)[Mm]/;
+
+export function isMouseEvent(input: string): boolean {
+  return MOUSE_PATTERN.test(input);
 }
