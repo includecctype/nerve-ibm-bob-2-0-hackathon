@@ -56,7 +56,7 @@ function buildSessionEntries(): SessionEntry[] {
   return Object.entries(config.session ?? {}).map(([session_id, session]) => ({
     id: session_id,
     label: `${new Date(session.last_updated ?? 0).toLocaleString()} — ${
-      session.categories.length
+      session.categories?.length ?? 0
     } categories`,
   }));
 }
