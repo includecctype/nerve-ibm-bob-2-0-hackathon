@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 
 from langchain_core.tools import tool
@@ -35,23 +34,19 @@ def makeTaskTools(
     reacquire_prompt_fn,
 ):
     @tool
-    async def processNewTask(categories: str) -> str:
+    async def processNewTask(categories: list[dict]) -> str:
         """
         Replace the pending task graph with the morphed graph for this turn.
-        Input must be a JSON array of {name, tasks: [str], depends_on: [str]}.
-        Never include running or finished categories.
+
+        `categories` is the complete pending list of {name, tasks, depends_on}
+        objects. Never include running or finished categories.
         """
 
         user = connected_users.get(sid)
         if user is None:
             return "Error: session not found"
 
-        try:
-            raw = json.loads(categories) if isinstance(categories, str) else categories
-        except json.JSONDecodeError as e:
-            return f"Error: invalid JSON — {e}"
-
-        validated, error = validateCategoryInput(raw)
+        validated, error = validateCategoryInput(categories)
         if error:
             return error
         if not validated:
