@@ -32,11 +32,17 @@ async def finishPromptLock(sid: str) -> None:
         lock.release()
 
 
-async def releasePromptTemporarily(sid: str) -> None:
-    """Temporarily release the prompt lock while execution runs (lets new prompts queue)."""
+async def releasePromptTemporarily(sid: str) -> bool:
+    """Temporarily release the prompt lock while execution runs (lets new prompts queue).
+
+    Returns True only when this call actually released the lock, so the caller
+    knows whether it must re-acquire it afterwards.
+    """
     lock = _get_sid_lock(sid)
     if lock.locked():
         lock.release()
+        return True
+    return False
 
 
 async def reacquirePromptAfterExecute(sid: str) -> None:
@@ -44,11 +50,11 @@ async def reacquirePromptAfterExecute(sid: str) -> None:
     await _get_sid_lock(sid).acquire()
 
 
-async def sidLock(sid: str) -> asyncio.Lock:
+def sidLock(sid: str) -> asyncio.Lock:
     """Return (and lazily create) the prompt lock for a sid."""
     return _get_sid_lock(sid)
 
 
-async def execSidLock(sid: str) -> asyncio.Lock:
+def execSidLock(sid: str) -> asyncio.Lock:
     """Return (and lazily create) the execution lock for a sid."""
     return _get_exec_lock(sid)
