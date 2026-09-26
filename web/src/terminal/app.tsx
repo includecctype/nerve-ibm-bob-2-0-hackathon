@@ -122,7 +122,7 @@ export function App() {
     questionnaire_draft,
   });
 
-  const status_cwd = process.cwd();
+  const status_cwd = "web workspace";
   const status_model_label = user_data ? getModelLabel(user_data.main_agent_id) : "—";
 
   useEffect(() => {
