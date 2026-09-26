@@ -12,7 +12,8 @@
     "start": "node dist/app.js",
     "typecheck": "tsc --noEmit",
     "lint": "biome lint src",
-    "format": "biome format --write src"
+    "format": "biome format --write src",
+    "format:check": "biome format src"
   },
   "dependencies": {
     "@inkjs/ui": "^2.0.0",
