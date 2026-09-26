@@ -1,4 +1,5 @@
-import { Box, Text, render, useApp, useInput } from "ink";
+import { withFullScreen } from "fullscreen-ink";
+import { Box, Text, useApp, useInput } from "ink";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { filterCommands } from "./command/command_list.js";
 import { KeyPrompt } from "./command/key_prompt.js";
@@ -14,7 +15,7 @@ import type {
 } from "./dto/wire.js";
 import { useBracketedPaste } from "./hooks/use_bracketed_paste.js";
 import { useLayout } from "./hooks/use_layout.js";
-import { isMouseEvent, parseWheelEvent, useMouseTracking } from "./hooks/use_mouse_wheel.js";
+import { isMouseEvent, useMouseWheel } from "./hooks/use_mouse_wheel.js";
 import { ensureConfigFile, readConfig, readSessionData } from "./save/config_reader.js";
 import { saveDisplayHistory, waitForWrites, writeUserDataToFile } from "./save/config_writer.js";
 import { commitSession, getUserData, setUserData } from "./session/user_data.js";
@@ -56,19 +57,20 @@ type OverlayState =
 
 function buildSessionEntries(): SessionEntry[] {
   const config = readConfig();
-  return Object.entries(config.session ?? {}).map(([session_id, session]) => ({
-    id: session_id,
-    label: `${new Date(session.last_updated ?? 0).toLocaleString()} — ${
-      session.categories?.length ?? 0
-    } categories`,
-  }));
+  return Object.entries(config.session ?? {})
+    .sort(([, a], [, b]) => (b.last_updated ?? 0) - (a.last_updated ?? 0))
+    .map(([session_id, session]) => ({
+      id: session_id,
+      label: `${new Date(session.last_updated ?? 0).toLocaleString()} — ${
+        session.categories?.length ?? 0
+      } categories`,
+    }));
 }
 
 function App() {
   const { exit } = useApp();
   const layout = useLayout();
   useBracketedPaste();
-  useMouseTracking();
 
   const [connected, setConnected] = useState(false);
   const [displays, setDisplays] = useState<DisplayHistoryDTO[]>([]);
@@ -105,8 +107,14 @@ function App() {
         setDisplays((prev) => [...prev, { role: "assistant", content: text }]);
       },
       onTaskUpdate: (payload: TaskUpdatePayload) => setCategories(payload.categories),
-      onSubagentResponse: () => {
-        // display-only progress; never forwarded to the main agent
+      onSubagentResponse: (data) => {
+        // Display-only progress — sub-agent reports never reach the main agent.
+        const entry: DisplayHistoryDTO = {
+          role: "system",
+          content: `${data.status === "done" ? "✓" : "✗"} [${data.category}] ${data.report}`,
+        };
+        saveDisplayHistory(entry);
+        setDisplays((prev) => [...prev, entry]);
       },
       onQuestionnaire: (qs) => {
         // A duplicate emit of the same questions must not reset the write-in box.
@@ -242,6 +250,8 @@ function App() {
   };
 
   const handleSessionSelect = async (session_id: string | null) => {
+    // Persist the outgoing session before its in-memory state is replaced.
+    await waitForWrites();
     setOverlay(null);
     if (session_id === null) {
       setUserData({
@@ -296,6 +306,20 @@ function App() {
   const chat_row_count = chatRows(displays, layout.chat_width).length;
   const max_chat_scroll = Math.max(0, chat_row_count - layout.chat_height);
 
+  // Mouse wheel scrolls whichever pane the pointer is over; mouse sequences are
+  // swallowed at the input emitter so overlays never see them.
+  useMouseWheel(true, (direction, x) => {
+    const over_tasks = x - 1 >= layout.chat_width;
+    if (direction === "up") {
+      if (over_tasks) setTaskScroll((value) => Math.max(0, value - 1));
+      else setChatScroll((value) => Math.min(max_chat_scroll, value + 1));
+    } else if (over_tasks) {
+      setTaskScroll((value) => value + 1);
+    } else {
+      setChatScroll((value) => Math.max(0, value - 1));
+    }
+  });
+
   const handleInputChange = (value: string) => {
     setInputValue(value);
     setCommandMode(value.startsWith("/"));
@@ -323,19 +347,8 @@ function App() {
     // Overlays and the questionnaire own the keyboard while they are open.
     if (overlay || questions) return;
 
-    const wheel = parseWheelEvent(input);
-    if (wheel) {
-      const over_tasks = wheel.column - 1 >= layout.chat_width;
-      if (wheel.direction === "up") {
-        if (over_tasks) setTaskScroll((value) => Math.max(0, value - 1));
-        else setChatScroll((value) => Math.min(max_chat_scroll, value + 1));
-      } else if (over_tasks) {
-        setTaskScroll((value) => value + 1);
-      } else {
-        setChatScroll((value) => Math.max(0, value - 1));
-      }
-      return;
-    }
+    // Mouse sequences are normally swallowed at the emitter; ignore any that
+    // slip through on a non-patched stdin.
     if (isMouseEvent(input)) return;
 
     // Slash-command suggestions own Up/Down/Tab while command mode is active.
@@ -536,4 +549,6 @@ function App() {
   );
 }
 
-render(<App />);
+withFullScreen(<App />, {
+  kittyKeyboard: { flags: ["disambiguateEscapeCodes"] },
+}).start();
