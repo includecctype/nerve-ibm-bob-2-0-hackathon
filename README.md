@@ -157,10 +157,12 @@ VITE_NERVE_BACKEND_URL=http://localhost:8000 pnpm dev
 ### OCI setup
 
 1. Create a bucket in OCI Object Storage.
-2. Provide an OCI API-key config at `~/.oci/config` (or point
-   `OCI_CONFIG_FILE` / `OCI_CONFIG_PROFILE` at one) with an `object-family`
-   policy.
-3. Set `OCI_NAMESPACE` and `OCI_BUCKET` in the root `.env`.
+2. Create an API key for a user with an `object-family` policy, then put the
+   key's fields in the root `.env`: `OCI_TENANCY`, `OCI_USER`,
+   `OCI_FINGERPRINT`, `OCI_REGION`, and the private key — either
+   `OCI_KEY_FILE` (a mounted `.pem` path) or `OCI_KEY_CONTENT` (the PEM inline
+   with `\n` escapes). Add `OCI_PRIVATE_KEY_PASSPHRASE` if the key is encrypted.
+3. Set `OCI_NAMESPACE` and `OCI_BUCKET`.
 
 Without OCI credentials the terminal still works; the explorer and viewer show a
 clear error until the bucket is configured.
@@ -184,15 +186,16 @@ enable Pages with the "GitHub Actions" source first.
 | `WEB_SEARCH_API` | backend (`backend/systemconfig/websearch.py`) | Exa key for `webSearch` / `webFetch` |
 | `NERVE_BACKEND_URL` | CLI (`terminal/src/socket/client.ts`) | gateway URL; defaults to the public deployment |
 | `WEB_ALLOWED_ORIGINS` | backend (`backend/gateway/config.py`) | comma-separated browser origins allowed to connect; defaults to any (`*`) |
+| `OCI_TENANCY` / `OCI_USER` / `OCI_FINGERPRINT` / `OCI_REGION` | backend (`backend/storage/oci/oci_client.py`) | OCI API-key identity and region |
+| `OCI_KEY_FILE` / `OCI_KEY_CONTENT` | backend (`backend/storage/oci/oci_client.py`) | private key: a mounted PEM path, or inline PEM with `\n` escapes |
+| `OCI_PRIVATE_KEY_PASSPHRASE` | backend (`backend/storage/oci/oci_client.py`) | passphrase for an encrypted private key (optional) |
 | `OCI_NAMESPACE` | backend (`backend/storage/oci/oci_client.py`) | Object Storage namespace |
 | `OCI_BUCKET` | backend (`backend/storage/oci/oci_client.py`) | bucket that holds the web session folders |
-| `OCI_CONFIG_FILE` | backend (`backend/storage/oci/oci_client.py`) | OCI API-key config path; defaults to `~/.oci/config` |
-| `OCI_CONFIG_PROFILE` | backend (`backend/storage/oci/oci_client.py`) | OCI config profile; defaults to `DEFAULT` |
 | `VITE_NERVE_BACKEND_URL` | web (`web/src/terminal/socket/client.ts`) | gateway URL baked into the browser build; defaults to the public deployment |
 
 `.env` and `web/.env` are git-ignored; `.env.example` and `web/.env.example`
-list the keys with blank values. OCI region and API keys are read from
-`~/.oci/config`, so only the namespace and bucket need to be set.
+list the keys with blank values. OCI credentials are read entirely from the
+environment.
 
 ## Checks
 
