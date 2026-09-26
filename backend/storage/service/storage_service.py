@@ -101,17 +101,26 @@ def listTree(folder: str, path: str = "") -> list[TreeNode]:
     return nodes
 
 
+def readRaw(
+    folder: str,
+    path: str,
+    max_bytes: int = storage_limits.MAX_READ_BYTES,
+) -> tuple[str, bool]:
+    """Return a file's decoded text and whether it was truncated for display."""
+    raw = object_ops.getBytes(fileKey(folder, path))
+    truncated = len(raw) > max_bytes
+    if truncated:
+        raw = raw[:max_bytes]
+    return raw.decode("utf-8", errors="replace"), truncated
+
+
 def readText(
     folder: str,
     path: str,
     offset: int = 1,
     limit: int = storage_limits.DEFAULT_READ_LIMIT,
 ) -> str:
-    raw = object_ops.getBytes(fileKey(folder, path))
-    truncated = len(raw) > storage_limits.MAX_READ_BYTES
-    if truncated:
-        raw = raw[: storage_limits.MAX_READ_BYTES]
-    text = raw.decode("utf-8", errors="replace")
+    text, truncated = readRaw(folder, path)
     if not text:
         return "(empty file)"
 
