@@ -3,9 +3,10 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
+from langchain.agents import create_agent
+from langchain.agents.middleware import ToolErrorMiddleware
 from langchain_core.language_models import BaseChatModel
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.prebuilt import create_react_agent
+from langgraph.checkpoint.memory import InMemorySaver
 
 from model.agent_session import AgentSession
 
@@ -26,7 +27,9 @@ def initModel(agent_id: int, api_key: str) -> BaseChatModel:
     if cache_key in model_cache:
         return model_cache[cache_key]
 
-    provider, model_name = PROVIDER_MAP.get(agent_id, PROVIDER_MAP[1])
+    if agent_id not in PROVIDER_MAP:
+        raise ValueError(f"Invalid agent_id: {agent_id}")
+    provider, model_name = PROVIDER_MAP[agent_id]
 
     from langchain.chat_models import init_chat_model
 
@@ -35,9 +38,19 @@ def initModel(agent_id: int, api_key: str) -> BaseChatModel:
     return model
 
 
-def toolErrorMessage(exc: Exception) -> str:
+def toolErrorMiddleware() -> ToolErrorMiddleware:
     """Convert any tool exception into a string the model can recover from."""
-    return f"Tool error: {exc}. Please adjust and try again."
+
+    def on_error(exc: Exception, request: Any) -> str:
+        return (
+            f"Tool failed: {type(exc).__name__}: {exc}. "
+            "Adjust inputs and retry once, or report the failure to the user and continue."
+        )
+
+    async def aon_error(exc: Exception, request: Any) -> str:
+        return on_error(exc, request)
+
+    return ToolErrorMiddleware(on_error=on_error, aon_error=aon_error)
 
 
 def buildAgent(
@@ -48,23 +61,14 @@ def buildAgent(
     thread_id: str | None = None,
 ) -> AgentSession:
     model = initModel(agent_id, api_key)
-    checkpointer = MemorySaver()
+    checkpointer = InMemorySaver()
     tid = thread_id or str(uuid.uuid4())
 
-    from langchain_core.messages import SystemMessage
-    from langchain_core.prompts import ChatPromptTemplate
-    from langgraph.prebuilt import ToolNode
-
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            # SystemMessage keeps JSON examples in the prompt literal: a ("system",
-            # ...) tuple would be parsed as a template and choke on its braces.
-            SystemMessage(system_prompt),
-            ("placeholder", "{messages}"),
-            ("placeholder", "{agent_scratchpad}"),
-        ]
+    agent = create_agent(
+        model=model,
+        tools=tools,
+        checkpointer=checkpointer,
+        system_prompt=system_prompt,
+        middleware=[toolErrorMiddleware()],
     )
-    tool_node = ToolNode(tools, handle_tool_errors=toolErrorMessage)
-
-    agent = create_react_agent(model=model, tools=tool_node, prompt=prompt, checkpointer=checkpointer)  # type: ignore[arg-type]
     return AgentSession(agent=agent, thread_id=tid)
