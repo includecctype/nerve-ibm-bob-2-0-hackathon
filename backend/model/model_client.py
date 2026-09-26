@@ -13,7 +13,7 @@ from model.agent_session import AgentSession
 model_cache: dict[tuple[int, str], BaseChatModel] = {}
 
 PROVIDER_MAP = {
-    1: ("openrouter", "openai/auto"),
+    1: ("openrouter", "auto"),
     2: ("groq", "openai/gpt-oss-120b"),
     3: ("anthropic", "claude-fable-5"),
     4: ("baseten", "moonshotai/Kimi-K2.6"),
