@@ -1,15 +1,11 @@
-/**
- * Utility helpers for parsing tool arguments from the wire format.
- */
-
-export function getString(args: Record<string, unknown>, key: string, fallback = ""): string {
-  return args[key] !== undefined ? String(args[key]) : fallback;
+export function asString(value: unknown): string {
+  return typeof value === "string" ? value : "";
 }
 
-export function getNumber(args: Record<string, unknown>, key: string, fallback = 0): number {
-  return args[key] !== undefined ? Number(args[key]) : fallback;
+export function asOptionalString(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
 }
 
-export function getOptionalString(args: Record<string, unknown>, key: string): string | null {
-  return args[key] !== undefined ? String(args[key]) : null;
+export function asNumber(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
