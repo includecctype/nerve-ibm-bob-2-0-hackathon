@@ -1,0 +1,39 @@
+{
+  "name": "nerve-web",
+  "version": "1.0.0",
+  "description": "nerve — browser workspace with an Ink terminal, OCI file explorer, and file viewer",
+  "type": "module",
+  "private": true,
+  "packageManager": "pnpm@12.5.1",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint src",
+    "format": "biome format --write src",
+    "format:check": "biome format src"
+  },
+  "dependencies": {
+    "@xterm/xterm": "^5.5.0",
+    "ink": "^6.8.0",
+    "ink-web": "^0.2.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-reconciler": "^0.33.0",
+    "scheduler": "^0.27.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "path-browserify": "^1.0.1",
+    "typescript": "^5.9.0",
+    "vite": "^7.3.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
