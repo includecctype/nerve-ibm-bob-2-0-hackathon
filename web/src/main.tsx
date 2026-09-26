@@ -1,3 +1,4 @@
+import "./shims/chalk_patch.js";
 import { createRoot } from "react-dom/client";
 import "./styles/global.css";
 import { WebApp } from "./web_app.js";
