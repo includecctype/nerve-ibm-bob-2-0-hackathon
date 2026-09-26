@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-import logging
-from collections.abc import Callable
-from typing import Any
+from collections.abc import Awaitable, Callable
 
 from systemconfig.limits import (
     DEFAULT_RETRY_AFTER_SECONDS,
@@ -11,52 +9,61 @@ from systemconfig.limits import (
     MODEL_CALL_TIMEOUT_SECONDS,
 )
 
-logger = logging.getLogger(__name__)
-
 
 def isRateLimitError(exc: BaseException) -> bool:
-    """Return True if the exception looks like a provider 429 / rate-limit error."""
-    msg = str(exc).lower()
-    return "429" in msg or "rate limit" in msg or "rate_limit" in msg or "too many requests" in msg
+    """Return True when the exception is a provider 429 / rate-limit error."""
+    status = getattr(exc, "status_code", None)
+    if status == 429:
+        return True
+    name = type(exc).__name__
+    return name == "TooManyRequestsResponseError" or "TooManyRequests" in name
 
 
 def retryAfterSeconds(exc: BaseException) -> float:
-    """Parse the Retry-After value from the exception message, or fall back to the default."""
-    msg = str(exc)
-    import re
-
-    match = re.search(r"retry.after[:\s]+(\d+(?:\.\d+)?)", msg, re.IGNORECASE)
-    if match:
-        return float(match.group(1))
+    """Read Retry-After from the exception's response headers, or fall back to the default."""
+    headers = getattr(exc, "headers", None)
+    if headers is not None:
+        try:
+            value = headers.get("Retry-After") if hasattr(headers, "get") else None
+            if value is not None:
+                return float(value)
+        except (TypeError, ValueError, AttributeError):
+            pass
+    data = getattr(exc, "data", None)
+    if data is not None:
+        error = getattr(data, "error", None)
+        metadata = getattr(error, "metadata", None) if error is not None else None
+        if metadata is not None and hasattr(metadata, "get"):
+            try:
+                raw_headers = metadata.get("headers") or metadata.get("Headers")
+                if isinstance(raw_headers, dict):
+                    value = raw_headers.get("Retry-After") or raw_headers.get("retry-after")
+                    if value is not None:
+                        return float(value)
+            except (TypeError, ValueError):
+                pass
     return float(DEFAULT_RETRY_AFTER_SECONDS)
 
 
-async def callWithRateLimitRetry(
-    fn: Callable[[], Any],
+async def callWithRateLimitRetry[T](
+    factory: Callable[[], Awaitable[T]],
+    *,
     attempts: int = MAX_MODEL_ATTEMPTS,
     timeout: float = MODEL_CALL_TIMEOUT_SECONDS,
-) -> Any:
+) -> T:
+    """Run an async call with a per-attempt timeout; on 429 wait Retry-After and retry.
+
+    Non-rate-limit failures and the final attempt are raised immediately.
     """
-    Call an async callable up to `attempts` times.
-    On 429 errors, sleep Retry-After seconds and retry.
-    On other errors or timeout, raise immediately.
-    """
-    last_exc: BaseException | None = None
-    for attempt in range(1, attempts + 1):
+    if attempts < 1:
+        raise ValueError("attempts must be at least 1")
+    for attempt in range(attempts):
         try:
-            return await asyncio.wait_for(fn(), timeout=timeout)
+            return await asyncio.wait_for(factory(), timeout=timeout)
         except TimeoutError as exc:
-            logger.warning("[retry] attempt %d/%d timed out after %ss", attempt, attempts, timeout)
-            last_exc = exc
-            raise
-        except Exception as exc:
-            if isRateLimitError(exc):
-                wait = retryAfterSeconds(exc)
-                logger.warning(
-                    "[retry] attempt %d/%d rate-limited; sleeping %.1fs", attempt, attempts, wait
-                )
-                await asyncio.sleep(wait)
-                last_exc = exc
-                continue
-            raise
-    raise last_exc  # type: ignore[misc]
+            raise TimeoutError(f"Call timed out after {timeout}s") from exc
+        except BaseException as exc:
+            if not isRateLimitError(exc) or attempt + 1 >= attempts:
+                raise
+            await asyncio.sleep(retryAfterSeconds(exc))
+    raise RuntimeError("retry loop exited without returning or raising")
