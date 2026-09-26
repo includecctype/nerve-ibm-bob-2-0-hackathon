@@ -17,19 +17,10 @@ from gateway.state.session_locks import (
     acquirePromptLock,
     finishPromptLock,
 )
+from model.agent_session import lastTextFromResult
 from systemconfig.limits import AGENT_TURN_TIMEOUT_SECONDS
 
 logger = logging.getLogger(__name__)
-
-
-def describeTurnSteps(result: dict) -> str:
-    """Extract the final text content from an agent ainvoke result dict."""
-    messages = result.get("messages", [])
-    for msg in reversed(messages):
-        content = getattr(msg, "content", None)
-        if isinstance(content, str) and content.strip():
-            return content
-    return str(result)
 
 
 async def invokeMainAgent(sid: str, system_prompt: str, user_message: str) -> None:
@@ -49,11 +40,10 @@ async def invokeMainAgent(sid: str, system_prompt: str, user_message: str) -> No
     await acquirePromptLock(sid)
     turn_start = time.monotonic()
     try:
-        full_system = withTaskContext(sid, system_prompt)
 
         async def _call():
-            return await session.ainvoke(
-                full_system,
+            return await session.runTurn(
+                withTaskContext(sid, system_prompt),
                 user_message,
                 mem.history,
             )
@@ -61,7 +51,7 @@ async def invokeMainAgent(sid: str, system_prompt: str, user_message: str) -> No
         result = await callWithRateLimitRetry(_call, timeout=AGENT_TURN_TIMEOUT_SECONDS)
         logStep("agent_turn", turn_start)
 
-        response_text = describeTurnSteps(result)
+        response_text = lastTextFromResult(result)
         resetErrorBounce(sid)
         await sio.emit("main_agent_response", response_text, to=sid)
 
@@ -79,4 +69,4 @@ async def invokeMainAgent(sid: str, system_prompt: str, user_message: str) -> No
             await emitAgentError(sid, error_msg)
 
     finally:
-        finishPromptLock(sid)
+        await finishPromptLock(sid)

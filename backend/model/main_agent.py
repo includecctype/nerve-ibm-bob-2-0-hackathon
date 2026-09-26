@@ -11,7 +11,6 @@ def createMainAgent(
     agent_id: int,
     api_key: str,
     tools: list,
-    history: list[dict] | None = None,
     thread_id: str | None = None,
 ) -> AgentSession:
     tid = thread_id or str(uuid.uuid4())

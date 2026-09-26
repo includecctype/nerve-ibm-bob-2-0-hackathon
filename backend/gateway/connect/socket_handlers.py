@@ -9,6 +9,7 @@ from ai_tool.delegation.pending_requests.pending_requests import (
 )
 from ai_tool.task.emit.planning_placeholder import emitPlanningPlaceholder
 from ai_tool.task.task_graph import buildStatusMap, cascadeBlocked
+from ai_tool.tool_registry import getMainAgentTools
 from gateway.agent.invoke_main_agent import invokeMainAgent
 from gateway.config import AgentBinding, ConnectedUserMemory, connected_users, sio
 from gateway.dto.legacy_task_migration import normalizeLegacyTasks
@@ -51,7 +52,7 @@ async def connect(sid: str, environ: dict, auth: dict | None) -> None:
 
         history: list[dict] = auth.get("history") or []
 
-        agent_session = createMainAgent(main_agent_id, api_key, history)
+        agent_session = createMainAgent(main_agent_id, api_key, getMainAgentTools(sid))
 
         connected_users[sid] = ConnectedUserMemory(
             api_key=api_key,

@@ -13,6 +13,7 @@ from ai_tool.task.task_graph import (
     truncateResult,
 )
 from ai_tool.task.task_models import TaskCategory
+from model.agent_session import lastTextFromResult
 
 logger = logging.getLogger(__name__)
 
@@ -59,11 +60,10 @@ async def runCategory(
 
         try:
             result = await call_with_retry_fn(
-                sub_agent.ainvoke,
-                prompt,
+                lambda agent=sub_agent, task=prompt: agent.ainvoke(task),
                 timeout=subagent_timeout,
             )
-            content = result.get("output", str(result)) if isinstance(result, dict) else str(result)
+            content = lastTextFromResult(result)
             item.result = content
             item.status = "done"
             updateTaskDisplay(sid, connected_users)
