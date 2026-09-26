@@ -24,7 +24,7 @@ def requestTool(
     Times out after `timeout` seconds and resolves with an error string.
     """
     request_id = str(uuid.uuid4())
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     future: asyncio.Future = loop.create_future()
     _pending[(sid, request_id)] = future
 

@@ -80,7 +80,7 @@ async def user_prompt(sid: str, data: str) -> None:
     resetErrorBounce(sid)
     mem.last_user_request = str(data)
 
-    emitPlanningPlaceholder(
+    await emitPlanningPlaceholder(
         sid,
         mem.pending_categories + mem.running_categories + mem.completed_categories,
     )
