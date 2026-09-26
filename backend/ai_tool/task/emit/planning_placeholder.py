@@ -9,9 +9,7 @@ def isPlaceholderDescription(description: str) -> bool:
     return description == PLANNING_DESCRIPTION
 
 
-def emitPlanningPlaceholder(sid: str, real_categories: list[TaskCategory]) -> None:
-    import asyncio
-
+async def emitPlanningPlaceholder(sid: str, real_categories: list[TaskCategory]) -> None:
     from gateway.config import sio
 
     placeholder = {
@@ -24,7 +22,7 @@ def emitPlanningPlaceholder(sid: str, real_categories: list[TaskCategory]) -> No
     wire_cats = _sessionCategoriesToWire(real_categories)
     payload = {"categories": [placeholder] + wire_cats}
 
-    asyncio.create_task(sio.emit("task_update", payload, to=sid))
+    await sio.emit("task_update", payload, to=sid)
 
 
 def _sessionCategoriesToWire(categories: list[TaskCategory]) -> list[dict]:

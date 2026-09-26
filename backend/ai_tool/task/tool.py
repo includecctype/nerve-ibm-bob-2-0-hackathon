@@ -33,7 +33,7 @@ def makeTaskTools(
     reacquire_prompt_fn,
 ):
     @tool
-    def processNewTask(categories: str) -> str:
+    async def processNewTask(categories: str) -> str:
         """
         Replace the pending task graph with the morphed graph for this turn.
         Input must be a JSON array of {name, tasks: [str], depends_on: [str]}.
@@ -74,7 +74,7 @@ def makeTaskTools(
         for cat in newly_blocked:
             user.completed_categories.append(cat)
 
-        updateTaskDisplay(sid, connected_users)
+        await updateTaskDisplay(sid, connected_users)
 
         msg = f"Task graph updated: {len(user.pending_categories)} pending categories."
         if notes:
@@ -117,7 +117,7 @@ def makeTaskTools(
         return "\n".join(parts)
 
     @tool
-    def checkRunningTasks() -> str:
+    async def checkRunningTasks() -> str:
         """
         Return the current status of running and pending categories.
         Use before queueing more work.

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import asyncio
-
 from ai_tool.task.task_models import TERMINAL_STATUSES, TaskCategory
 
 
@@ -26,7 +24,7 @@ def sessionCategoriesToWire(
     return [categoryToWire(c) for c in ordered]
 
 
-def updateTaskDisplay(sid: str, connected_users: dict) -> None:
+async def updateTaskDisplay(sid: str, connected_users: dict) -> None:
     user = connected_users.get(sid)
     if user is None:
         return
@@ -39,4 +37,4 @@ def updateTaskDisplay(sid: str, connected_users: dict) -> None:
             user.completed_categories,
         )
     }
-    asyncio.create_task(sio.emit("task_update", payload, to=sid))
+    await sio.emit("task_update", payload, to=sid)

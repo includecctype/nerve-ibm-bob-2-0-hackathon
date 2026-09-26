@@ -37,7 +37,7 @@ async def runCategory(
 
     for index, item in enumerate(category.tasks):
         item.status = "running"
-        updateTaskDisplay(sid, connected_users)
+        await updateTaskDisplay(sid, connected_users)
 
         sub_agent = create_sub_agent_fn(
             agent_id=user.main_agent.agent_id,
@@ -66,7 +66,7 @@ async def runCategory(
             content = lastTextFromResult(result)
             item.result = content
             item.status = "done"
-            updateTaskDisplay(sid, connected_users)
+            await updateTaskDisplay(sid, connected_users)
         except Exception as exc:  # noqa: BLE001
             logger.error("Task failed in category '%s': %s", category.name, exc)
             item.status = "failed"
@@ -74,14 +74,14 @@ async def runCategory(
             for remaining in category.tasks[index + 1 :]:
                 remaining.status = "failed"
             category.status = "failed"
-            updateTaskDisplay(sid, connected_users)
-            subAgentResponse(sid, category.name, "failed", str(exc))
+            await updateTaskDisplay(sid, connected_users)
+            await subAgentResponse(sid, category.name, "failed", str(exc))
             return
 
     category.status = "done"
-    updateTaskDisplay(sid, connected_users)
+    await updateTaskDisplay(sid, connected_users)
     report = truncateResult(category.tasks[-1].result) if category.tasks else ""
-    subAgentResponse(sid, category.name, "done", report)
+    await subAgentResponse(sid, category.name, "done", report)
 
 
 async def runTaskGraph(
@@ -137,7 +137,7 @@ async def runTaskGraph(
             )
             running_tasks[task] = cat
 
-        updateTaskDisplay(sid, connected_users)
+        await updateTaskDisplay(sid, connected_users)
 
         if not running_tasks:
             # No running tasks — check if there is still pending work

@@ -14,7 +14,7 @@ def makeQuestionTool(sid: str):
     """Return the makeQuestion tool bound to the given sid."""
 
     @tool
-    def makeQuestion(question_json: str) -> str:
+    async def makeQuestion(question_json: str) -> str:
         """
         Ask the user one or more questions with predefined options.
 
@@ -41,7 +41,7 @@ def makeQuestionTool(sid: str):
             if any(not isinstance(o, str) or not o.strip() for o in options):
                 return "Error: all options must be non-empty strings"
 
-        sendStructuredQuestion(sid, questions)
+        await sendStructuredQuestion(sid, questions)
         return "Questions sent. Waiting for user response."
 
     return makeQuestion
