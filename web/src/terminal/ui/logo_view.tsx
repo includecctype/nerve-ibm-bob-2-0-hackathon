@@ -16,6 +16,7 @@ export function LogoView() {
       <Text color={theme.primary}>{BANNER.join("\n")}</Text>
       <Text color={theme.muted}>terminal-native multi-agent coding orchestrator</Text>
       <Text color={theme.muted}>connecting...</Text>
+      <Text color={theme.warning}>not connected — press /model or /key to add an API key</Text>
     </Box>
   );
 }

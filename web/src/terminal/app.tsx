@@ -87,7 +87,9 @@ export function App() {
   const [chat_scroll, setChatScroll] = useState(0);
   const [task_scroll, setTaskScroll] = useState(0);
   const [error_msg, setErrorMsg] = useState<string | null>(null);
-  const [overlay, setOverlay] = useState<OverlayState | null>(null);
+  const [overlay, setOverlay] = useState<OverlayState | null>(() =>
+    Object.keys(getUserData().api_keys).length === 0 ? { kind: "model" } : null,
+  );
   const [model_id, setModelId] = useState(getUserData().main_agent_id);
   const questions_ref = useRef<StructuredQuestionDTO[]>([]);
 
