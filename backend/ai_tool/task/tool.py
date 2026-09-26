@@ -95,8 +95,16 @@ def makeTaskTools(
         if not user.pending_categories and not user.running_categories:
             return "No tasks to execute."
 
-        await release_prompt_fn(sid)
+        # One execution pass at a time per session: the main agent may issue this
+        # tool as a parallel call, and two passes would race on the shared graph.
+        exec_lock = exec_lock_fn(sid)
+        if exec_lock.locked():
+            return "Error: execution already in progress for this session."
+
+        await exec_lock.acquire()
+        released_prompt = False
         try:
+            released_prompt = await release_prompt_fn(sid)
             summary = await runTaskGraph(
                 sid=sid,
                 connected_users=connected_users,
@@ -105,7 +113,9 @@ def makeTaskTools(
                 subagent_timeout=SUBAGENT_TIMEOUT_SECONDS,
             )
         finally:
-            await reacquire_prompt_fn(sid)
+            exec_lock.release()
+            if released_prompt:
+                await reacquire_prompt_fn(sid)
 
         parts = [
             "Execution complete.",
