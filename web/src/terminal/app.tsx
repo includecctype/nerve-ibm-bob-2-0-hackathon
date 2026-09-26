@@ -481,7 +481,7 @@ export function App() {
   // overlays must stay reachable — otherwise a missing API key is a dead end.
   if (!connected) {
     return (
-      <Box flexDirection="column" height={layout.rows}>
+      <Box flexDirection="column" height={layout.rows - 1}>
         <LogoView />
         {error_msg && (
           <Box paddingX={1}>
@@ -496,7 +496,7 @@ export function App() {
   }
 
   return (
-    <Box flexDirection="column" height={layout.rows}>
+    <Box flexDirection="column" height={layout.rows - 1}>
       {/* Error banner */}
       {error_msg && (
         <Box>
