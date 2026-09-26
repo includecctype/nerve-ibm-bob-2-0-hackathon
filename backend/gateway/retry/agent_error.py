@@ -10,15 +10,9 @@ from systemconfig.limits import ERROR_COOLDOWN_SECONDS, MAX_GIVE_UP_BOUNCES
 logger = logging.getLogger(__name__)
 
 
-async def emitAgentError(sid: str, message: str) -> None:
-    """Emit an agent_error event, deduped within ERROR_COOLDOWN_SECONDS."""
-    now = time.monotonic()
-    last = error_cooldown.get(sid, 0.0)
-    if now - last < ERROR_COOLDOWN_SECONDS:
-        logger.debug("[error] suppressing duplicate agent_error for sid=%s", sid)
-        return
-    error_cooldown[sid] = now
-    await sio.emit("agent_error", message, to=sid)
+def errorBounceCount(sid: str) -> int:
+    """Return the current error bounce count for a sid."""
+    return error_bounce_count.get(sid, 0)
 
 
 def bumpErrorBounce(sid: str) -> int:
@@ -36,9 +30,31 @@ def resetErrorBounce(sid: str) -> None:
 def clearErrorState(sid: str) -> None:
     """Remove all error tracking for a sid (called on disconnect)."""
     error_bounce_count.pop(sid, None)
-    error_cooldown.pop(sid, None)
+    for key in [key for key in error_cooldown if key[0] == sid]:
+        error_cooldown.pop(key, None)
+
+
+def shouldEmitAgentError(sid: str, message: str) -> bool:
+    """False if an identical (sid, message) was emitted within ERROR_COOLDOWN_SECONDS."""
+    key = (sid, message)
+    now = time.monotonic()
+    last = error_cooldown.get(key)
+    if last is not None and now - last < ERROR_COOLDOWN_SECONDS:
+        return False
+    error_cooldown[key] = now
+    return True
 
 
 def isGiveUpExhausted(sid: str) -> bool:
     """Return True when the give-up bounce cap has been exceeded."""
-    return error_bounce_count.get(sid, 0) > MAX_GIVE_UP_BOUNCES
+    return errorBounceCount(sid) > MAX_GIVE_UP_BOUNCES
+
+
+async def emitAgentError(sid: str, message: str) -> None:
+    """Emit agent_error unless the bounce cap is past or the same error is cooling down."""
+    if isGiveUpExhausted(sid):
+        return
+    if not shouldEmitAgentError(sid, message):
+        logger.debug("[error] suppressing duplicate agent_error for sid=%s", sid)
+        return
+    await sio.emit("agent_error", message, to=sid)
