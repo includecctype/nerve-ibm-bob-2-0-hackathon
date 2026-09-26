@@ -49,7 +49,9 @@ async def invokeMainAgent(sid: str, system_prompt: str, user_message: str) -> No
 
         response_text = lastTextFromResult(result)
         resetErrorBounce(sid)
-        await sio.emit("main_agent_response", response_text, to=sid)
+        await updateTaskDisplay(sid, connected_users)
+        if response_text.strip():
+            await sio.emit("main_agent_response", response_text, to=sid)
 
     except Exception as exc:
         logStep("agent_turn_failed", turn_start)

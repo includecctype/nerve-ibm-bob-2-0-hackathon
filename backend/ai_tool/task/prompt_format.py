@@ -54,7 +54,11 @@ def formatFinishedForPrompt(completed: list[TaskCategory]) -> str:
         return "No completed categories."
     lines = []
     for c in completed:
-        lines.append(f"- {c.name} [{c.status}]")
+        results = "; ".join(
+            f"{t.description}: {truncateResult(t.result)}" for t in c.tasks if t.result
+        )
+        suffix = f": {results}" if results else ""
+        lines.append(f"- {c.name} [{c.status}]{suffix}")
     return "\n".join(lines)
 
 
@@ -77,11 +81,13 @@ def buildTaskPrompt(
     dep_results = ""
     dep_names = {normalizeName(d) for d in category.depends_on}
     for c in completed:
-        if normalizeName(c.name) not in dep_names or not c.tasks:
+        if normalizeName(c.name) not in dep_names:
             continue
-        dep_result = c.tasks[-1].result
-        if dep_result:
-            dep_results += f"\nResult from '{c.name}':\n{truncateResult(dep_result)}"
+        for t in c.tasks:
+            if t.result:
+                dep_results += (
+                    f"\nResult from '{c.name}' - {t.description}:\n{truncateResult(t.result)}"
+                )
 
     parts = [
         f"Overall goal: {last_user_request}",
