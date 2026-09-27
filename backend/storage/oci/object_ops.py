@@ -6,6 +6,12 @@ import oci
 
 from storage.oci.oci_client import getBucket, getClient, getNamespace
 
+# OCI returns only object names unless these fields are requested. The SDK
+# honors a comma-separated string but not a list (a list returns just its first
+# field), so pass it joined; without timestamps the cleanup cannot expire
+# sessions and listings report no size or date.
+LIST_OBJECT_FIELDS = "name,size,timeCreated,timeModified"
+
 
 @dataclass
 class ObjectEntry:
@@ -35,10 +41,15 @@ def listObjects(
         delimiter=delimiter,
         limit=limit,
         start=start,
+        fields=LIST_OBJECT_FIELDS,
     )
     data = response.data
     objects = [
-        ObjectEntry(name=obj.name, size=obj.size, updated_at=str(obj.time_created))
+        ObjectEntry(
+            name=obj.name,
+            size=obj.size,
+            updated_at=obj.time_created.isoformat() if obj.time_created else "",
+        )
         for obj in (data.objects or [])
     ]
     return Listing(
