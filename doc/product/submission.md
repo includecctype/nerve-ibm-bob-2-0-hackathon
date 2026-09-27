@@ -27,9 +27,8 @@ setup is reproducible.
 | Artifact | Purpose |
 |---|---|
 | `AGENTS.md` | Working agreement: plan first, ask before assuming, follow the rules. |
-| `.opencode/opencode.json` | Runtime config: MCP servers, permissions, instruction files. |
-| `.opencode/rules/*` | Structure, naming, Obsidian, and LibreOffice rules. |
-| `.bob/mcp.json` + `.bob/rules/*` | The same MCP servers and rules, mirrored for Bob. |
+| `.bob/mcp.json` | Bob's MCP servers: Obsidian, Penpot, and LibreOffice. |
+| `.bob/rules/*` | The structure, naming, Obsidian, and LibreOffice rules Bob follows. |
 
 ### One worktree and one pull request per concern
 
