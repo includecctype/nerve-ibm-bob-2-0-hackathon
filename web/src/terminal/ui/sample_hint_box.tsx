@@ -19,7 +19,7 @@ export function SampleHintBox({ screenWidth, screenHeight }: SampleHintBoxProps)
     <CommandPickerOverlay screenWidth={screenWidth} screenHeight={screenHeight}>
       <CommandPickerBox title="While the demo runs — watch for:" width={screenWidth}>
         {TIPS.map((tip) => (
-          <Text key={tip} dimColor>
+          <Text key={tip} bold color="#ffffff">
             {`• ${tip}`}
           </Text>
         ))}

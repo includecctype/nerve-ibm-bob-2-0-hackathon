@@ -110,37 +110,60 @@
   font-style: italic;
 }
 
-/* Status accents drawn on top of the mermaid-generated shapes. */
-.tgraph-status-running rect,
-.tgraph-status-running polygon,
-.tgraph-status-running circle,
-.tgraph-status-running ellipse,
-.tgraph-status-running path {
-  stroke: var(--accent);
+/* Status theming: override the SVG's node custom properties per status so the
+   shape fill, stroke and label colour all follow the shared palette. */
+g.node.tgraph-status-running {
+  --_node-fill: color-mix(in srgb, var(--s-running) 16%, var(--bg));
+  --_node-stroke: var(--s-running);
+  --_text: var(--s-running);
 }
 
-.tgraph-status-done rect,
-.tgraph-status-done polygon,
-.tgraph-status-done circle,
-.tgraph-status-done ellipse,
-.tgraph-status-done path {
-  stroke: var(--accent-dim);
+g.node.tgraph-status-done {
+  --_node-fill: color-mix(in srgb, var(--s-done) 16%, var(--bg));
+  --_node-stroke: var(--s-done);
+  --_text: var(--s-done);
 }
 
-.tgraph-status-failed rect,
-.tgraph-status-failed polygon,
-.tgraph-status-failed circle,
-.tgraph-status-failed ellipse,
-.tgraph-status-failed path {
-  stroke: var(--error);
+g.node.tgraph-status-failed {
+  --_node-fill: color-mix(in srgb, var(--s-failed) 18%, var(--bg));
+  --_node-stroke: var(--s-failed);
+  --_text: var(--s-failed);
 }
 
-.tgraph-status-blocked rect,
-.tgraph-status-blocked polygon,
-.tgraph-status-blocked circle,
-.tgraph-status-blocked ellipse,
-.tgraph-status-blocked path {
-  stroke: var(--warn);
+g.node.tgraph-status-blocked {
+  --_node-fill: color-mix(in srgb, var(--s-blocked) 16%, var(--bg));
+  --_node-stroke: var(--s-blocked);
+  --_text: var(--s-blocked);
+}
+
+g.node.tgraph-status-pending {
+  --_node-fill: color-mix(in srgb, var(--s-pending) 10%, var(--bg));
+  --_node-stroke: var(--s-pending);
+  --_text: var(--s-pending);
+}
+
+.task-graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  padding: 4px 10px 6px;
+  border-bottom: 1px solid var(--border);
+  font-size: 10.5px;
+  color: var(--fg-dim);
+}
+
+.task-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  text-transform: capitalize;
+}
+
+.task-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
 }
 
 @keyframes tgraph-enter-kf {

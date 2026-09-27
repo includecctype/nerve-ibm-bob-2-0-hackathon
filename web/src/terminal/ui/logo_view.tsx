@@ -88,8 +88,13 @@ export function LogoView({
         alignItems="center"
       >
         <Text color="#00ff41">{BANNER}</Text>
-        <Box marginTop={1} marginBottom={1}>
-          <Text dimColor>Use /sample command to see an example</Text>
+        <Box flexDirection="column" alignItems="center" marginTop={1} marginBottom={1}>
+          <Text bold color="#ffffff">
+            Use /sample command to see an example
+          </Text>
+          <Text bold color="#ffffff">
+            Try spamming more /sample while a sample is running
+          </Text>
         </Box>
         {questionnaireActive ? (
           <Box width="100%" display="flex" flexDirection="column" alignItems="center">

@@ -1,4 +1,5 @@
 import type { TaskCategoryDTO } from "../terminal/dto/wire";
+import { STATUS_COLORS } from "./task_status";
 
 export type MermaidGraph = {
   code: string;
@@ -69,6 +70,8 @@ export function buildTaskMermaid(categories: TaskCategoryDTO[]): MermaidGraph {
     lines.push(`  ${id}["${escapeLabel(label)}"]`);
   }
 
+  const byName = new Map(categories.map((category) => [category.name, category]));
+  const edges: Array<{ from: string; to: string; color: string }> = [];
   for (const category of categories) {
     const to = nameToId.get(category.name);
     if (!to) {
@@ -77,10 +80,19 @@ export function buildTaskMermaid(categories: TaskCategoryDTO[]): MermaidGraph {
     for (const dep of category.depends_on) {
       const from = nameToId.get(dep);
       if (from && from !== to) {
-        lines.push(`  ${from} --> ${to}`);
+        const source = byName.get(dep);
+        edges.push({ from, to, color: STATUS_COLORS[source?.status ?? "pending"] });
       }
     }
   }
+
+  for (const edge of edges) {
+    lines.push(`  ${edge.from} --> ${edge.to}`);
+  }
+  // linkStyle colours each edge (and its arrowhead) to the source task's status.
+  edges.forEach((edge, index) => {
+    lines.push(`  linkStyle ${index} stroke:${edge.color}`);
+  });
 
   return { code: lines.join("\n"), idToName };
 }

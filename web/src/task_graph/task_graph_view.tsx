@@ -1,8 +1,9 @@
-import { type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { TaskCategoryDTO } from "../terminal/dto/wire";
 import "../styles/task_graph.css";
 import { buildTaskMermaid } from "./task_mermaid";
 import { TaskFooter } from "./task_footer";
+import { STATUS_COLORS, STATUS_ORDER } from "./task_status";
 import { useTaskUpdates } from "./use_task_updates";
 
 type SvgRender = (text: string, options?: Record<string, unknown>) => string;
@@ -22,6 +23,12 @@ const ANIM_MS = 700;
 const MIN_SCALE = 0.3;
 const MAX_SCALE = 3;
 const TOOLTIP_MAX_W = 300;
+
+// Expose the palette to CSS as --s-<status> so node fills/strokes/text can theme
+// off the same source of truth used for edges.
+const STATUS_VARS = Object.fromEntries(
+  Object.entries(STATUS_COLORS).map(([status, color]) => [`--s-${status}`, color]),
+) as CSSProperties;
 
 function marker(status: string): string {
   switch (status) {
@@ -199,10 +206,18 @@ export function TaskGraphView() {
   const show_error = !show_empty && (load_error ?? rendered.error);
 
   return (
-    <div className="task-graph" ref={root_ref}>
+    <div className="task-graph" ref={root_ref} style={STATUS_VARS}>
       <div className="task-graph-header">
         <span className="task-graph-title">Task graph</span>
         <span className="task-graph-hint">drag · scroll to zoom · hover a node</span>
+      </div>
+      <div className="task-graph-legend">
+        {STATUS_ORDER.map((status) => (
+          <span className="task-legend-item" key={status}>
+            <span className="task-legend-dot" style={{ backgroundColor: STATUS_COLORS[status] }} />
+            {status}
+          </span>
+        ))}
       </div>
       <div
         className="task-graph-body"
