@@ -57,7 +57,16 @@ async def connect(sid: str, environ: dict, auth: dict | None) -> None:
         await sio.emit("connection_status", False, to=sid)
         return
 
+    client_kind = str(auth.get("client_kind", "cli"))
     is_provided = main_agent_id == PROVIDED_AGENT_ID
+
+    # The provided model is funded for the web demo only; the CLI must use its
+    # own key, so refuse it for any non-web client.
+    if is_provided and client_kind != "web":
+        logger.warning("[connect] rejected sid=%s (provided model is web-only)", sid)
+        await sio.emit("connection_status", False, to=sid)
+        return
+
     if (not api_key and not is_provided) or main_agent_id not in range(1, 7):
         logger.warning("[connect] rejected sid=%s (bad auth)", sid)
         await sio.emit("connection_status", False, to=sid)
@@ -87,7 +96,6 @@ async def connect(sid: str, environ: dict, auth: dict | None) -> None:
 
         # Web clients get a fresh object-storage folder per visit; the CLI works
         # against the local machine instead and gets no folder.
-        client_kind = str(auth.get("client_kind", "cli"))
         storage_folder = makeSessionFolder() if client_kind == "web" else None
         if storage_folder is not None:
             try:
