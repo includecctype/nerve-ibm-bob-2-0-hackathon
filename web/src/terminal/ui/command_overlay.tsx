@@ -10,6 +10,7 @@ type CommandOverlayProps = {
   onModelSelect: (value: string) => void;
   onKeyModelSelect: (value: string) => void;
   onSessionSelect: (value: string) => void;
+  onSampleSelect: (value: string) => void;
   onApiKeySubmit: (value: string) => void;
 };
 
@@ -20,6 +21,7 @@ export function CommandOverlay({
   onModelSelect,
   onKeyModelSelect,
   onSessionSelect,
+  onSampleSelect,
   onApiKeySubmit,
 }: CommandOverlayProps) {
   if (commandMode.type === "select_model") {
@@ -64,6 +66,22 @@ export function CommandOverlay({
               value: s.value,
             }))}
             onChange={onSessionSelect}
+          />
+        </CommandPickerBox>
+      </CommandPickerOverlay>
+    );
+  }
+
+  if (commandMode.type === "select_sample") {
+    return (
+      <CommandPickerOverlay screenWidth={screenWidth} screenHeight={screenHeight}>
+        <CommandPickerBox title="Run a sample demo:" width={screenWidth}>
+          <Select
+            options={commandMode.samples.map((s) => ({
+              label: s.label,
+              value: s.value,
+            }))}
+            onChange={onSampleSelect}
           />
         </CommandPickerBox>
       </CommandPickerOverlay>
