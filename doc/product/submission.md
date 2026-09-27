@@ -18,42 +18,66 @@
 
 ## IBM Bob usage for this project
 
-This section explains how IBM Bob was used to build the project, and where the
-instructions live. The AI config files are verifiable in the repo.
+IBM Bob did not autocomplete this project — it built it. Bob ran as the
+engineering agent behind every change, and its configuration is committed so the
+setup is reproducible.
 
 ### AI config in the repo
 
 | Artifact | Purpose |
 |---|---|
-| `AGENTS.md` | Top-level working agreement: coding instincts, plan-first, ask-before-assuming, follow the rules. |
-| `.opencode/opencode.json` | Agent runtime config: MCP servers (Obsidian, LibreOffice, Penpot), permissions, instruction file list. |
-| `.opencode/rules/structure.md` | Project structure and naming rules (snake_case files, specific folders, no generic names). |
-| `.opencode/rules/variable.md` | Naming conventions (camelCase functions, PascalCase classes/enums, FULL_CAPS env vars). |
-| `.opencode/rules/obsidian.md` | Rules for writing into the Obsidian vault (the documentation set). |
-| `.opencode/rules/libreoffice.md` | Rules for generating documents/PDF via LibreOffice. |
-| `.bob/mcp.json` + `.bob/rules/*` | Mirrored Bob agent configuration (same rules and MCP servers). |
+| `AGENTS.md` | Working agreement: plan first, ask before assuming, follow the rules. |
+| `.opencode/opencode.json` | Runtime config: MCP servers, permissions, instruction files. |
+| `.opencode/rules/*` | Structure, naming, Obsidian, and LibreOffice rules. |
+| `.bob/mcp.json` + `.bob/rules/*` | The same MCP servers and rules, mirrored for Bob. |
 
-MCP servers wired into the agent: **Obsidian** (write and maintain the notes),
-**LibreOffice** (generate the submission PDF/deck), **Penpot**
-(concept/architecture visuals).
+### One worktree and one pull request per concern
 
-### How Bob was directed to work
+Every change lived in its own **git worktree**, created beside the main checkout
+and named `nerve-ibm-bob-2-0-hackathon-<topic>` (for example
+`...-detached_execution`, `...-web_storage_client`, `...-sample_command`). Bob
+implemented the change in the worktree, committed a scoped message, opened a pull
+request with the `gh` CLI, waited for the checks, and merged only when they were
+green. **84 concerns landed as 84 branches and 84 pull requests**, so `main`
+never held unreviewed work. This is deliberate: it mirrors the product's own
+message that independent workstreams should never block each other.
 
-- **Git worktrees per workstream** — separate worktrees and pull requests per
-  concern, so parallel work never collides and merges stay clean. This mirrors the
-  product's own message: independent workstreams should not block each other.
-- **Bug checking** — Bob reviewed code, hunted defects, and traced failures (for
-  example tool round-trips and scheduler edge cases).
-- **Solution and idea generation** — Bob explored approaches and alternatives
-  (see [competition_analysis](competition_analysis.md)) before committing to the
-  task-graph design.
-- **Documentation** — Bob maintains the vault via the Obsidian MCP, producing the
-  project map and the engineering references from the code.
-- **Assets** — Bob generated the submission PDF/deck through the LibreOffice MCP
-  and concept visuals via Penpot.
-- **Rules enforcement** — Bob followed the checks in
+### What Bob built
+
+- **Backend** — the LangChain/LangGraph agent layer, the DAG task-graph scheduler
+  (`backend/ai_tool/task/`), the Socket.IO gateway, prompt queuing, rate limiting,
+  OCI object storage, and detached background execution.
+- **CLI** — the two-pane Ink/React terminal, the slash-command menu, the
+  questionnaire, and the scroll model.
+- **Web** — the Ink-in-xterm terminal, the IDE shell, the file explorer and
+  viewer, and the `/sample` demo runner.
+- **Review and hardening** — Bob reviewed diffs, hunted defects, and traced
+  failures in tool round-trips, scheduler edge cases, and reconnect state; it
+  explored alternatives (see [competition_analysis](competition_analysis.md))
+  before committing to the task-graph design, and enforced the checks in
   [build_and_run](../engineering/build_and_run.md) (lint, format, typecheck,
-  secret scan) and the naming/structure rules in `.opencode/rules/`.
+  secret scan).
+
+### MCP tooling for everything that is not code
+
+Three MCP servers covered planning, documentation, design, and the presentation:
+
+- **Obsidian — planning and documentation.** Bob maintained the project vault
+  (`goal.md`, `project_map.md`, the engineering reference set, and the product
+  notes) and kept it in sync as the code changed.
+- **Penpot — design.** Bob produced the concept and architecture visuals and the
+  web-workspace layout.
+- **LibreOffice — the submission deck.** Bob drafted and refreshed the slides and
+  PDF from the product notes.
+
+### IBM watsonx.ai
+
+The model layer is provider-agnostic: `backend/model/model_client.py` maps a model
+id to a provider. That map includes **IBM watsonx.ai** — model 7 runs IBM Granite
+on watsonx.ai, with credentials read from `WATSONX_API_KEY`,
+`WATSONX_PROJECT_ID`, and `WATSONX_URL`. Because the gateway builds its agents
+with LangChain, the same task graph, tools, scheduler, and prompt pipeline run
+unchanged on Granite. (IBM watsonx Orchestrate was out of scope for this build.)
 
 ## Slides
 
