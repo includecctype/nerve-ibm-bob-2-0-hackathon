@@ -27,7 +27,7 @@ export function ChatViewport({ chatBlocks, displayScroll, viewportRows }: ChatVi
         </Text>
       )}
       {chatBlocks.length === 0 ? (
-        <Text dimColor>No messages yet</Text>
+        <Text dimColor>Use /sample command to see an example</Text>
       ) : (
         chatBlocks.map((block) => (
           <Box

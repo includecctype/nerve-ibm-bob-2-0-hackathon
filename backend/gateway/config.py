@@ -6,6 +6,8 @@ from typing import Any
 import socketio
 from pydantic import BaseModel, Field
 
+from gateway.health import healthApp
+
 
 def allowedOrigins() -> str | list[str]:
     """Return the browser origins allowed to open the Socket.IO connection.
@@ -21,7 +23,7 @@ def allowedOrigins() -> str | list[str]:
 
 
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins=allowedOrigins())
-app = socketio.ASGIApp(sio)
+app = socketio.ASGIApp(sio, other_asgi_app=healthApp)
 
 
 class AgentBinding(BaseModel):

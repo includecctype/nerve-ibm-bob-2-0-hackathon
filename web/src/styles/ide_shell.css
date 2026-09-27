@@ -21,7 +21,7 @@
 }
 
 .ide-session {
-  color: var(--fg-dim);
+  color: var(--warn);
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
