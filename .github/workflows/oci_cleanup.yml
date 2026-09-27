@@ -1,0 +1,31 @@
+name: OCI Session Cleanup
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    name: Remove expired OCI session folders
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+      - run: uv sync --frozen
+      - name: Delete session folders older than 6 hours
+        run: uv run python -m storage.oci.cleanup
+        env:
+          OCI_TENANCY: ${{ secrets.OCI_TENANCY }}
+          OCI_USER: ${{ secrets.OCI_USER }}
+          OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
+          OCI_REGION: ${{ secrets.OCI_REGION }}
+          OCI_KEY_CONTENT: ${{ secrets.OCI_KEY_CONTENT }}
+          OCI_PRIVATE_KEY_PASSPHRASE: ${{ secrets.OCI_PRIVATE_KEY_PASSPHRASE }}
+          OCI_NAMESPACE: ${{ secrets.OCI_NAMESPACE }}
+          OCI_BUCKET: ${{ secrets.OCI_BUCKET }}

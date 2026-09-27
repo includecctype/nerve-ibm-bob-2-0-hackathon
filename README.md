@@ -171,6 +171,17 @@ NERVE_BACKEND_URL=http://localhost:8000 pnpm dev
 Without OCI credentials the terminal still works; the explorer and viewer show a
 clear error until the bucket is configured.
 
+### Session cleanup
+
+Web session folders are removed once they are older than 6 hours.
+`.github/workflows/oci_cleanup.yml` runs that sweep every 6 hours on GitHub
+Actions (and can be triggered manually); the module runs standalone as
+`cd backend && uv run python -m storage.oci.cleanup`. Add the same OCI
+credentials (`OCI_TENANCY`, `OCI_USER`, `OCI_FINGERPRINT`, `OCI_REGION`,
+`OCI_KEY_CONTENT`, `OCI_NAMESPACE`, `OCI_BUCKET`) as repository secrets for the
+workflow. Only `YYYY-MM-DD:<uuid>` folders are considered, and each folder's age
+comes from its objects' creation timestamps.
+
 ### Hosting the web workspace
 
 ```bash
