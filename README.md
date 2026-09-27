@@ -2,9 +2,9 @@
 
 **One living plan for your coding agents.**
 
-nerve keeps multi-agent coding work in a single, persistent task graph. Keep
-sending prompts: each one **incrementally re-plans** the work that's still ahead,
-while work already running keeps running — no restarts, no lost progress.
+nerve keeps multi-agent coding work in a **single, persistent task graph**.
+Keep sending prompts: each one **incrementally re-plans** the work that's still
+ahead, while work already running keeps running — no restarts, no lost progress.
 
 Most agents run a task list. nerve runs a graph that remembers.
 
