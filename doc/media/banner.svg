@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" role="img" aria-label="nerve — one living plan for your coding agents">
+  <rect width="1200" height="300" fill="#000000"/>
+  <g font-family="'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace">
+    <text x="64" y="148" fill="#00ff41" font-size="104" font-weight="700" letter-spacing="2">nerve</text>
+    <text x="66" y="196" fill="#c8ffd4" font-size="28">One living plan for your coding agents.</text>
+
+    <g fill="#00ff41" opacity="0.9" font-size="20">
+      <text x="66" y="248">prompt 1</text>
+      <text x="196" y="248">─▶</text>
+      <text x="246" y="248" fill="#3f8f4f">plan</text>
+      <text x="330" y="248">─▶</text>
+      <text x="380" y="248" fill="#3f8f4f">running</text>
+
+      <text x="540" y="248">prompt 2</text>
+      <text x="670" y="248">─▶</text>
+      <text x="720" y="248" fill="#00ff41">re-plan in place</text>
+      <text x="920" y="248">─▶</text>
+      <text x="970" y="248" fill="#3f8f4f">running work untouched</text>
+    </g>
+  </g>
+</svg>
