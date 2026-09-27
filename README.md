@@ -83,7 +83,7 @@ dependency — nothing else needs to be running.
 | Recipe | Does |
 |---|---|
 | `just backend` | uvicorn gateway on `:8000` (Doppler-wrapped) |
-| `just frontend` | `pnpm install --frozen-lockfile && pnpm dev` |
+| `just terminal` | `pnpm install --frozen-lockfile && pnpm dev` for the CLI (`frontend` is an alias) |
 | `just run` | `docker-up`, then the CLI in the foreground |
 | `just docker-up` / `docker-down` / `docker-build` / `docker-build-no-cache` / `docker-logs` | Compose lifecycle |
 | `just opencode` / `opencode-continue` / `bob` / `bob-run` / `bob-resume` | agent helpers (need Doppler) |
