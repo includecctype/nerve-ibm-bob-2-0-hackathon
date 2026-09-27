@@ -53,6 +53,7 @@ import { CommandOverlay } from "./ui/command_overlay";
 import { QUESTION_PREFIX } from "./ui/display_entry";
 import { LogoView } from "./ui/logo_view";
 import { PromptBox } from "./ui/prompt_box";
+import { SAMPLE_HINT_MS, SampleHintBox } from "./ui/sample_hint_box";
 import { TaskPane } from "./ui/task_pane";
 import {
   displayRowsFromEntries,
@@ -73,6 +74,7 @@ export function App() {
   const [display_scroll, setDisplayScroll] = useState(0);
   const [task_scroll, setTaskScroll] = useState(0);
   const [task_h_scroll, setTaskHScroll] = useState(0);
+  const [sample_hint_visible, setSampleHintVisible] = useState(false);
   const [, setConnectionStatus] = useState<boolean>(false);
 
   const [questions, setQuestions] = useState<StructuredQuestionDTO[]>([]);
@@ -101,6 +103,7 @@ export function App() {
     scroll: number;
     h_scroll: number;
   } | null>(null);
+  const sample_hint_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { height: screen_height, width: screen_width } = useScreenSize();
 
@@ -178,6 +181,25 @@ export function App() {
     setSelectedIdx(0);
     setInputKey((prev) => prev + 1);
   };
+
+  const hideSampleHint = useCallback(() => {
+    if (sample_hint_timer_ref.current !== null) {
+      clearTimeout(sample_hint_timer_ref.current);
+      sample_hint_timer_ref.current = null;
+    }
+    setSampleHintVisible(false);
+  }, []);
+
+  const showSampleHint = useCallback(() => {
+    hideSampleHint();
+    setSampleHintVisible(true);
+    sample_hint_timer_ref.current = setTimeout(() => {
+      sample_hint_timer_ref.current = null;
+      setSampleHintVisible(false);
+    }, SAMPLE_HINT_MS);
+  }, [hideSampleHint]);
+
+  useEffect(() => hideSampleHint, [hideSampleHint]);
 
   useInput(
     (input, key) => {
@@ -511,6 +533,7 @@ export function App() {
 
     demo_running_ref.current = false;
     demo_ref.current = { cancelled: false };
+    hideSampleHint();
     appendSystemNote(
       result === "done"
         ? `Sample finished: ${scenario.title}`
@@ -527,6 +550,7 @@ export function App() {
     setInputValue("");
     setSelectedIdx(0);
     setInputKey((prev) => prev + 1);
+    showSampleHint();
     void runSample(option.scenario);
   };
 
@@ -765,6 +789,9 @@ export function App() {
           />
         )}
         {command_overlay}
+        {sample_hint_visible && !logo_show && (
+          <SampleHintBox screenWidth={inner_width} screenHeight={inner_height} />
+        )}
       </Box>
     );
   }
