@@ -97,8 +97,9 @@ Set `NERVE_BACKEND_URL` explicitly to target a gateway, e.g.
 `http://localhost:8000` (local backend).
 
 Authentication sends `api_key`, `main_agent_id`, `client_kind: "cli"`,
-`categories`, and `history` (`socket/client.ts`). The CLI offers models 1–5; the
-provided model 6 is web-only.
+`categories`, and `history` (`socket/client.ts`). The CLI offers models 1–5 and 7
+(model 1 is IBM Granite on watsonx.ai, operator-funded); the provided model 6 is
+web-only.
 
 ## Build & packaging
 

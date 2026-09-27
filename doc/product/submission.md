@@ -73,7 +73,7 @@ Three MCP servers covered planning, documentation, design, and the presentation:
 ### IBM watsonx.ai
 
 The model layer is provider-agnostic: `backend/model/model_client.py` maps a model
-id to a provider. That map includes **IBM watsonx.ai** — model 7 runs IBM Granite
+id to a provider. That map includes **IBM watsonx.ai** — model 1 runs IBM Granite
 on watsonx.ai, with credentials read from `WATSONX_API_KEY`,
 `WATSONX_PROJECT_ID`, and `WATSONX_URL`. Because the gateway builds its agents
 with LangChain, the same task graph, tools, scheduler, and prompt pipeline run

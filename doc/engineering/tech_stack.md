@@ -11,7 +11,7 @@ Exact stack used by **nerve**.
 | Server | python-socketio ASGI app served by Uvicorn |
 | Transport | Socket.IO (WebSocket with HTTP long-polling fallback) |
 | Agent framework | LangChain `create_agent` + LangGraph `InMemorySaver` checkpointer |
-| Model providers | OpenRouter, Groq, Anthropic, Baseten, DeepSeek (via `init_chat_model`) |
+| Model providers | IBM watsonx.ai (IBM Granite), OpenRouter, Groq, Anthropic, Baseten, DeepSeek (`init_chat_model` + `langchain-ibm`) |
 | Web search | Exa (`exa-py`) |
 | HTTP | httpx + stdlib `HTMLParser` |
 | Validation | Pydantic |

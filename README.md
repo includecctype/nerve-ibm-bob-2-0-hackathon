@@ -147,11 +147,12 @@ just terminal  # CLI
 just web       # browser workspace
 ```
 
-Models are selected by id: the CLI offers 1–5, and the web workspace adds the
-provided model 6 (DeepSeek Flash, funded by the operator via `PROVIDED_MODEL_KEY`;
-the gateway refuses it for any non-web client). In the CLI, `↑`/`↓` and
-`PageUp`/`PageDown` scroll the chat, `Ctrl+↑`/`Ctrl+↓` scroll the Tasks pane, and
-`Esc` clears the prompt.
+Models are selected by id: **model 1 is IBM Granite on watsonx.ai**, models 2–5 are
+third-party providers, and model 7 is OpenRouter Auto. The web workspace also offers
+model 6 (DeepSeek Flash), funded by the operator via `PROVIDED_MODEL_KEY` and refused
+for non-web clients. Models 1 and 6 read their credentials from the server environment,
+so clients never handle those keys. In the CLI, `↑`/`↓` and `PageUp`/`PageDown` scroll
+the chat, `Ctrl+↑`/`Ctrl+↓` scroll the Tasks pane, and `Esc` clears the prompt.
 
 Setup details — environment variables, OCI storage, rate limits, and checks —
 live in [build_and_run](doc/engineering/build_and_run.md).
@@ -209,7 +210,7 @@ The rules for each server are committed, so the tooling is reproducible.
 ### IBM watsonx.ai
 
 The model layer is provider-agnostic — `backend/model/model_client.py` maps a
-model id to a provider. That map includes **IBM watsonx.ai**: model 7 runs IBM
+model id to a provider. That map includes **IBM watsonx.ai**: model 1 runs IBM
 Granite on watsonx.ai, with credentials read from `WATSONX_API_KEY`,
 `WATSONX_PROJECT_ID`, and `WATSONX_URL`. Because the gateway builds its agents
 with LangChain, the same task graph, tools, scheduler, and prompt pipeline run
