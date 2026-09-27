@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 
 from ai_tool.delegation.pending_requests.pending_requests import (
     cancelPendingRequests,
@@ -17,6 +18,7 @@ from gateway.dto.legacy_task_migration import normalizeLegacyTasks
 from gateway.dto.task_auth import normalizeCategories, splitCategories
 from gateway.prompt.questionnaire import QUESTIONNAIRE_SYSTEM
 from gateway.prompt.user_prompt import USER_PROMPT_SYSTEM
+from gateway.ratelimit.inbound_limiter import clientIp, connect_limiter, prompt_limiter
 from gateway.retry.agent_error import clearErrorState, resetErrorBounce
 from gateway.state.runtime_state import exec_locks, sid_locks
 from model.main_agent import createMainAgent
@@ -27,9 +29,26 @@ from storage.service import storage_service
 logger = logging.getLogger(__name__)
 
 
+async def promptRateLimited(sid: str, client_ip: str) -> bool:
+    """Throttle prompt turns per client IP; emit rate_limited and return True when full."""
+    if prompt_limiter.allow(client_ip):
+        return False
+    retry_after = math.ceil(prompt_limiter.retryAfterSeconds(client_ip))
+    logger.warning("[ratelimit] prompt denied sid=%s ip=%s", sid, client_ip)
+    await sio.emit("rate_limited", {"retry_after": retry_after}, to=sid)
+    return True
+
+
 @sio.event
 async def connect(sid: str, environ: dict, auth: dict | None) -> None:
     auth = auth or {}
+
+    client_ip = clientIp(environ)
+    if not connect_limiter.allow(client_ip):
+        logger.warning("[connect] rate limited sid=%s ip=%s", sid, client_ip)
+        await sio.emit("connection_status", False, to=sid)
+        return
+
     try:
         api_key: str = auth.get("api_key", "")
         main_agent_id: int = int(auth.get("main_agent_id", 1))
@@ -88,6 +107,7 @@ async def connect(sid: str, environ: dict, auth: dict | None) -> None:
             completed_categories=completed,
             history=history,
             client_kind=client_kind,
+            client_ip=client_ip,
             storage_folder=storage_folder,
         )
 
@@ -112,6 +132,9 @@ async def user_prompt(sid: str, data: str) -> None:
     if mem is None:
         return
 
+    if await promptRateLimited(sid, mem.client_ip):
+        return
+
     resetErrorBounce(sid)
     mem.last_user_request = str(data)
 
@@ -127,6 +150,9 @@ async def user_prompt(sid: str, data: str) -> None:
 async def questionnaire_answers(sid: str, data: list) -> None:
     mem = connected_users.get(sid)
     if mem is None:
+        return
+
+    if await promptRateLimited(sid, mem.client_ip):
         return
 
     resetErrorBounce(sid)

@@ -1,5 +1,6 @@
 import type {
   DisplayHistoryDTO,
+  RateLimitedDTO,
   StructuredQuestionDTO,
   SubagentResponseDTO,
   TaskUpdatePayload,
@@ -11,6 +12,7 @@ export let subagent_response_handler: ((data: SubagentResponseDTO) => void) | nu
 export let connection_status_handler: ((data: boolean) => void) | null = null;
 export let questionnaire_handler: ((questions: StructuredQuestionDTO[]) => void) | null = null;
 export let error_handler: ((message: string) => void) | null = null;
+export let rate_limited_handler: ((data: RateLimitedDTO) => void) | null = null;
 
 export function onDisplay(handler: (data: DisplayHistoryDTO) => void) {
   display_handler = handler;
@@ -34,4 +36,8 @@ export function onQuestionnaire(handler: (questions: StructuredQuestionDTO[]) =>
 
 export function onError(handler: (message: string) => void) {
   error_handler = handler;
+}
+
+export function onRateLimited(handler: (data: RateLimitedDTO) => void) {
+  rate_limited_handler = handler;
 }
