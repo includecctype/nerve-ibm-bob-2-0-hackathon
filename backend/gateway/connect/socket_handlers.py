@@ -29,7 +29,7 @@ from gateway.state.prompt_queue import (
 )
 from gateway.state.runtime_state import exec_locks, sid_locks
 from model.main_agent import createMainAgent
-from model.model_client import PROVIDED_AGENT_ID, providedModelKey
+from model.model_client import PROVIDED_AGENT_ID, WATSONX_AGENT_ID, providedModelKey
 from storage.oci.session_folder import makeSessionFolder
 from storage.service import storage_service
 
@@ -66,6 +66,7 @@ async def connect(sid: str, environ: dict, auth: dict | None) -> None:
 
     client_kind = str(auth.get("client_kind", "cli"))
     is_provided = main_agent_id == PROVIDED_AGENT_ID
+    is_watsonx = main_agent_id == WATSONX_AGENT_ID
 
     # The provided model is funded for the web demo only; the CLI must use its
     # own key, so refuse it for any non-web client.
@@ -74,7 +75,7 @@ async def connect(sid: str, environ: dict, auth: dict | None) -> None:
         await sio.emit("connection_status", False, to=sid)
         return
 
-    if (not api_key and not is_provided) or main_agent_id not in range(1, 7):
+    if (not api_key and not is_provided and not is_watsonx) or main_agent_id not in range(1, 8):
         logger.warning("[connect] rejected sid=%s (bad auth)", sid)
         await sio.emit("connection_status", False, to=sid)
         return

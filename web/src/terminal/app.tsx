@@ -47,7 +47,7 @@ import {
   onSubagentResponse,
   onTaskUpdate,
 } from "./socket/handler_registry";
-import { MODEL_OPTIONS, isProvidedModel } from "./systemconfig/model";
+import { isFundedModel, MODEL_OPTIONS } from "./systemconfig/model";
 import { ChatViewport } from "./ui/chat_viewport";
 import { CommandOverlay } from "./ui/command_overlay";
 import { QUESTION_PREFIX } from "./ui/display_entry";
@@ -358,7 +358,7 @@ export function App() {
     const model = MODEL_OPTIONS.find((m) => m.id === option.modelId);
     if (!model) return;
 
-    if (isProvidedModel(model.id)) {
+    if (isFundedModel(model.id)) {
       await finishModelSwitch(model.id, "");
       return;
     }
@@ -383,8 +383,8 @@ export function App() {
     if (!option) return;
     const model = MODEL_OPTIONS.find((m) => m.id === option.modelId);
     if (!model) return;
-    if (isProvidedModel(model.id)) {
-      appendSystemNote("DeepSeek Flash (provided) needs no API key");
+    if (isFundedModel(model.id)) {
+      appendSystemNote(`${model.label} is funded by the operator and needs no API key`);
       setCommandMode({ type: "none" });
       setInputValue("");
       setSelectedIdx(0);

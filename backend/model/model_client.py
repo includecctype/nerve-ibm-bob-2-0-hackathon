@@ -21,6 +21,7 @@ PROVIDER_MAP = {
     4: ("baseten", "moonshotai/Kimi-K2.6"),
     5: ("deepseek", "deepseek-chat"),
     6: ("deepseek", "deepseek-flash"),
+    7: ("ibm", "ibm/granite-3-3-8b-instruct"),
 }
 
 # Model 6 is "provided" and web-only: the operator funds it, so its key comes
@@ -28,6 +29,15 @@ PROVIDER_MAP = {
 # to clients.
 PROVIDED_AGENT_ID = 6
 PROVIDED_MODEL_ENV = "PROVIDED_MODEL_KEY"
+
+# Model 7 runs IBM Granite through watsonx.ai. The operator funds it too: the
+# credentials always come from the environment, so clients never handle them.
+WATSONX_AGENT_ID = 7
+WATSONX_API_KEY_ENV = "WATSONX_API_KEY"
+WATSONX_PROJECT_ENV = "WATSONX_PROJECT_ID"
+WATSONX_URL_ENV = "WATSONX_URL"
+WATSONX_DEFAULT_URL = "https://us-south.ml.cloud.ibm.com"
+WATSONX_MAX_NEW_TOKENS = 2048
 
 
 def providedModelKey() -> str:
@@ -37,9 +47,34 @@ def providedModelKey() -> str:
     return key
 
 
+def watsonxSettings() -> tuple[str, str, str]:
+    """Return (apikey, project_id, url) for watsonx.ai, all from the environment."""
+    apikey = os.getenv(WATSONX_API_KEY_ENV, "").strip()
+    project_id = os.getenv(WATSONX_PROJECT_ENV, "").strip()
+    if not apikey or not project_id:
+        raise ValueError(f"{WATSONX_API_KEY_ENV} and {WATSONX_PROJECT_ENV} must be set")
+    url = os.getenv(WATSONX_URL_ENV, "").strip() or WATSONX_DEFAULT_URL
+    return apikey, project_id, url
+
+
+def buildWatsonxModel(model_name: str) -> BaseChatModel:
+    from langchain_ibm import ChatWatsonx
+
+    apikey, project_id, url = watsonxSettings()
+    return ChatWatsonx(
+        model_id=model_name,
+        apikey=apikey,
+        project_id=project_id,
+        url=url,
+        params={"max_new_tokens": WATSONX_MAX_NEW_TOKENS},
+    )
+
+
 def initModel(agent_id: int, api_key: str) -> BaseChatModel:
     if agent_id == PROVIDED_AGENT_ID:
         api_key = providedModelKey()
+    elif agent_id == WATSONX_AGENT_ID:
+        api_key, _, _ = watsonxSettings()
 
     cache_key = (agent_id, api_key)
     if cache_key in model_cache:
@@ -49,9 +84,13 @@ def initModel(agent_id: int, api_key: str) -> BaseChatModel:
         raise ValueError(f"Invalid agent_id: {agent_id}")
     provider, model_name = PROVIDER_MAP[agent_id]
 
-    from langchain.chat_models import init_chat_model
+    if provider == "ibm":
+        model = buildWatsonxModel(model_name)
+    else:
+        from langchain.chat_models import init_chat_model
 
-    model = init_chat_model(model=model_name, model_provider=provider, api_key=api_key)
+        model = init_chat_model(model=model_name, model_provider=provider, api_key=api_key)
+
     model_cache[cache_key] = model
     return model
 
