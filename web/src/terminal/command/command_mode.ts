@@ -1,3 +1,4 @@
+import type { SampleOption } from "./sample_command";
 import type { SessionOption } from "./session_command";
 
 export type CommandMode =
@@ -10,4 +11,5 @@ export type CommandMode =
       modelLabel: string;
       flow: "model" | "key";
     }
-  | { type: "select_session"; sessions: SessionOption[] };
+  | { type: "select_session"; sessions: SessionOption[] }
+  | { type: "select_sample"; samples: SampleOption[] };

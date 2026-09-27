@@ -13,6 +13,9 @@ import {
 import { buildModelSelectOptions } from "./command/model_options";
 import { QuestionnaireBox } from "./command/questionnaire_box";
 import { isRestartCommand, restartConnection } from "./command/restart_command";
+import { isSampleCommand, loadSampleOptions } from "./command/sample_command";
+import { createSettleWaiter, playSample } from "./command/sample_player";
+import type { SampleScenario } from "./command/sample_scenarios";
 import {
   applySessionChoice,
   isSessionCommand,
@@ -61,7 +64,7 @@ import {
 import { BG_BLACK, BG_PANEL } from "./ui/theme";
 import "./socket/listener";
 
-const PROMPT_PLACEHOLDER = "SPAM your prompts here... (or /model, /session)";
+const PROMPT_PLACEHOLDER = "SPAM your prompts here... (or /model, /session, /sample)";
 
 export function App() {
   const [logo_show, setLogoShow] = useState(true);
@@ -87,6 +90,11 @@ export function App() {
   const [input_value, setInputValue] = useState("");
   const [selected_idx, setSelectedIdx] = useState(0);
   const [input_key, setInputKey] = useState(0);
+
+  const demo_ref = useRef<{ cancelled: boolean }>({ cancelled: false });
+  const demo_running_ref = useRef(false);
+  const settle_ref = useRef(createSettleWaiter());
+  const questionnaire_active_ref = useRef(false);
 
   const { height: screen_height, width: screen_width } = useScreenSize();
 
@@ -130,6 +138,10 @@ export function App() {
     questions_ref.current = questions;
   }, [questions]);
 
+  useEffect(() => {
+    questionnaire_active_ref.current = questionnaire_active;
+  }, [questionnaire_active]);
+
   const chat_lines = useMemo(
     () => flattenDisplayEntries(displays, entry_content_width),
     [displays, entry_content_width],
@@ -170,6 +182,10 @@ export function App() {
       if (key.escape && questionnaire_free_text) {
         setQuestionnaireFreeText(false);
         setQuestionnaireDraft("");
+        return;
+      }
+      if (key.escape && demo_running_ref.current) {
+        demo_ref.current.cancelled = true;
         return;
       }
       if (key.escape && command_mode.type !== "none") {
@@ -261,13 +277,16 @@ export function App() {
   // assign
   useEffect(() => {
     onDisplay((entry) => {
+      settle_ref.current.noteActivity();
       setDisplays((prev) => [...prev, entry]);
     });
     onTaskUpdate(() => {
+      settle_ref.current.noteActivity();
       setTasks(user_data?.categories ?? []);
     });
     // Display-only progress line — sub-agent reports never reach the main agent.
     onSubagentResponse((data) => {
+      settle_ref.current.noteActivity();
       const entry: DisplayHistoryDTO = {
         role: "system",
         content: `${data.status === "done" ? "✓" : "✗"} [${data.category}] ${data.report}`,
@@ -288,6 +307,7 @@ export function App() {
       }
     });
     onQuestionnaire((qs) => {
+      settle_ref.current.noteActivity();
       // A duplicate emit of the same questions must not wipe the write-in box.
       const prev = questions_ref.current;
       if (
@@ -305,9 +325,12 @@ export function App() {
       setQuestionnaireDraft("");
     });
     onError((message) => {
+      settle_ref.current.noteActivity();
       setDisplays((prev) => [...prev, { role: "error", content: message }]);
     });
     onRateLimited((data) => {
+      if (demo_running_ref.current) demo_ref.current.cancelled = true;
+      settle_ref.current.noteActivity();
       setDisplays((prev) => [
         ...prev,
         { role: "error", content: `Rate limited — try again in ${data.retry_after}s` },
@@ -429,8 +452,55 @@ export function App() {
     finishSessionSwitch();
   };
 
+  const runSample = async (scenario: SampleScenario) => {
+    if (demo_running_ref.current) return;
+    demo_running_ref.current = true;
+    const token = { cancelled: false };
+    demo_ref.current = token;
+
+    appendSystemNote(`Sample: ${scenario.title}`);
+    const result = await playSample(scenario, {
+      sendPrompt: (prompt) => {
+        emitUserPrompt(prompt);
+        setDisplays((prev) => [...prev, { role: "user", content: prompt }]);
+      },
+      onStep: (step, index, total) => {
+        appendSystemNote(`sample ${index + 1}/${total} · ${step.label}`);
+      },
+      waitForSettle: () => {
+        settle_ref.current.noteActivity();
+        return settle_ref.current.wait({
+          isCancelled: () => token.cancelled,
+          isPaused: () => questionnaire_active_ref.current,
+        });
+      },
+      isCancelled: () => token.cancelled,
+    });
+
+    demo_running_ref.current = false;
+    demo_ref.current = { cancelled: false };
+    appendSystemNote(
+      result === "done"
+        ? `Sample finished: ${scenario.title}`
+        : `Sample stopped: ${scenario.title}`,
+    );
+  };
+
+  const handleSampleSelect = (value: string) => {
+    if (command_mode.type !== "select_sample") return;
+    const option = command_mode.samples.find((s) => s.value === value);
+    if (!option) return;
+    setCommandMode({ type: "none" });
+    setLogoShow(false);
+    setInputValue("");
+    setSelectedIdx(0);
+    setInputKey((prev) => prev + 1);
+    void runSample(option.scenario);
+  };
+
   const handlePromptSubmit = (value: string) => {
     const trimmed = completeToSelectedCommand(value.trim());
+    if (demo_running_ref.current) demo_ref.current.cancelled = true;
     setInputValue("");
     setSelectedIdx(0);
     setInputKey((prev) => prev + 1);
@@ -463,6 +533,13 @@ export function App() {
       return;
     }
 
+    if (command_mode.type === "none" && isSampleCommand(trimmed)) {
+      appendSystemNote("/sample — choose a demo scenario");
+      setLogoShow(false);
+      setCommandMode({ type: "select_sample", samples: loadSampleOptions() });
+      return;
+    }
+
     if (command_mode.type === "none" && isExitCommand(trimmed)) {
       void exitApp();
       return;
@@ -491,7 +568,7 @@ export function App() {
 
     if (command_mode.type === "none" && isSlashCommand(trimmed)) {
       appendSystemNote(
-        `Unknown command: ${trimmed}. Try /model, /key, /session, /exit, or /restart`,
+        `Unknown command: ${trimmed}. Try /model, /key, /session, /sample, /exit, or /restart`,
       );
       setLogoShow(false);
       return;
@@ -558,6 +635,7 @@ export function App() {
       onSessionSelect={(val) => {
         void handleSessionSelect(val);
       }}
+      onSampleSelect={handleSampleSelect}
       onApiKeySubmit={(val) => {
         void handleApiKeySubmit(val);
       }}
