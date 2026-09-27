@@ -228,7 +228,20 @@ and interaction shell around agents you already run.
 - **Responsiveness.** Teams keep re-steering instead of restarting, which shortens
   the gap between intent and working code.
 
-The full case is in [business_value](doc/product/business_value.md).
+### How it compares
+
+Request-scoped agents (Claude Code, OpenAI Codex, Cursor, Aider, OpenHands) are
+strong executors, but every prompt starts a fresh plan. nerve keeps the plan:
+
+| Buyer question | Request-scoped agents | nerve |
+|---|---|---|
+| Re-planning / re-explaining | every prompt re-plans | one living plan; work is deduped |
+| Cost of changing your mind | restart, lose in-flight work | pending work re-planned; running work untouched |
+| Parallelism risk | dependencies improvised by the model | dispatched from explicit dependency readiness |
+| Where code lives (CLI) | per-tool (vendor or local) | on your machine; the server is a thin orchestrator |
+
+The full cases are in [business_value](doc/product/business_value.md) and
+[competition_analysis](doc/product/competition_analysis.md).
 
 ## Repository map
 

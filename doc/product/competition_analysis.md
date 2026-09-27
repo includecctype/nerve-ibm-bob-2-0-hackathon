@@ -47,6 +47,22 @@ Parallel subagents are standard across agentic coding tools (IBM Bob subagents,
 Claude Code Task/subagents, OpenAI Codex). Few, if any, ship a cross-prompt task
 graph that both remembers and re-steers; that memory is nerve's differentiation.
 
+## Other agentic coding tools
+
+The mainstream agentic coding tools are **request-scoped executors** (Claude
+Code, OpenAI Codex, Cursor, Aider, OpenHands, Copilot): each prompt is planned on
+its own, and steering means restarting the prompt. (Competitor statements are
+external and descriptive, not endorsements.)
+
+| Capability | Request-scoped agents (external) | nerve |
+|---|---|---|
+| Unit of work | one prompt / one spawned agent | an entry in a persistent work graph |
+| Across prompts | re-plans from scratch | incremental re-planning on one living plan |
+| Task relationships | implicit in the model's prose | first-class `depends_on`, dedupe, result flow |
+| Re-steering while work runs | restart the prompt | pending work re-planned; running work untouched |
+| Parallel dispatch | ad hoc / user-approved | triggered by dependency readiness |
+| Where code runs (CLI) | per-tool (vendor or local) | on the user's machine; server is a thin orchestrator |
+
 ## Why not "just a scheduler"?
 
 Airflow, Temporal, CI, and build systems already do scheduling, dedupe, and
