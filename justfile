@@ -28,8 +28,11 @@ backend:
 	doppler run --project {{doppler_project}} --config {{doppler_config}} -- sh -c "cd backend && uv run uvicorn main:app --host 0.0.0.0 --port 8000"
 
 # Install dependencies and start the terminal client
-frontend:
+terminal:
 	doppler run --project {{doppler_project}} --config {{doppler_config}} -- sh -c "cd terminal && pnpm install --frozen-lockfile && pnpm dev"
+
+# Alias for `terminal`
+frontend: terminal
 
 # Install dependencies and start the web workspace
 web:
@@ -41,7 +44,7 @@ web-build:
 
 # Start the backend in docker, then the terminal client
 run: docker-up
-	just frontend
+	just terminal
 
 # --- Docker -----------------------------------------------------------------
 
