@@ -25,28 +25,23 @@ function parseMouseSgr(input: string): { button: number; x: number; y: number } 
   return { button, x, y };
 }
 
-const ENABLE_MOUSE = `${ESC}[?1000h${ESC}[?1002h${ESC}[?1006h`;
-const DISABLE_MOUSE = `${ESC}[?1000l${ESC}[?1002l${ESC}[?1006l`;
+const ENABLE_MOUSE = `${ESC}[?1000h${ESC}[?1006h`;
+const DISABLE_MOUSE = `${ESC}[?1000l${ESC}[?1006l`;
 
 export type WheelDirection = "up" | "down";
-export type DragPhase = "start" | "move" | "end";
 
 /**
- * Enables terminal SGR mouse reporting (wheel + button drag) and forwards
- * events. Mouse sequences are swallowed on Ink's shared input emitter so
- * TextInput never inserts them.
+ * Enables terminal SGR mouse reporting and reports wheel events.
+ * Swallows mouse sequences on Ink's shared input emitter so TextInput never inserts them.
  */
-export function useMouse(
+export function useMouseWheel(
   enabled: boolean,
   on_wheel: (direction: WheelDirection, x: number, y: number) => void,
-  on_drag: (phase: DragPhase, x: number, y: number) => void,
 ): void {
   const { stdout } = useStdout();
   const { internal_eventEmitter } = useStdin();
   const on_wheel_ref = useRef(on_wheel);
   on_wheel_ref.current = on_wheel;
-  const on_drag_ref = useRef(on_drag);
-  on_drag_ref.current = on_drag;
 
   useEffect(() => {
     if (!enabled || !internal_eventEmitter) {
@@ -63,14 +58,6 @@ export function useMouse(
           if ((match.button & 64) !== 0) {
             const direction: WheelDirection = (match.button & 1) === 0 ? "up" : "down";
             on_wheel_ref.current(direction, match.x, match.y);
-          } else if (args[0].endsWith("m")) {
-            if (match.button === 0) {
-              on_drag_ref.current("end", match.x, match.y);
-            }
-          } else if (match.button === 0) {
-            on_drag_ref.current("start", match.x, match.y);
-          } else if (match.button === 32) {
-            on_drag_ref.current("move", match.x, match.y);
           }
           return true;
         }

@@ -1,0 +1,208 @@
+.task-graph {
+  /* Aliases keep the SVG theme vars from self-referencing (e.g. --bg: var(--bg)). */
+  --tgraph-bg: var(--bg);
+  --tgraph-fg: var(--fg);
+  --tgraph-accent: var(--accent);
+  --tgraph-line: var(--border);
+  --tgraph-muted: var(--fg-dim);
+  --tgraph-border: var(--accent-dim);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+}
+
+.task-graph-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.task-graph-title {
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+
+.task-graph-hint {
+  color: var(--fg-dim);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-graph-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.task-graph-body:active {
+  cursor: grabbing;
+}
+
+.task-graph-empty,
+.task-graph-error {
+  padding: 16px;
+  font-size: 12.5px;
+  color: var(--fg-dim);
+  text-align: center;
+}
+
+.task-graph-error {
+  color: var(--error);
+  white-space: pre-wrap;
+}
+
+.tgraph-canvas {
+  transform-origin: center center;
+  will-change: transform;
+}
+
+.tgraph-canvas svg {
+  display: block;
+  height: auto;
+}
+
+.tgraph-tooltip {
+  position: absolute;
+  z-index: 5;
+  max-width: 300px;
+  padding: 6px 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 11.5px;
+  color: var(--fg);
+  pointer-events: none;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 60%);
+}
+
+.tgraph-tooltip-title {
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.tgraph-tooltip-task {
+  color: var(--fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tgraph-tooltip-empty {
+  color: var(--fg-dim);
+  font-style: italic;
+}
+
+/* Status accents drawn on top of the mermaid-generated shapes. */
+.tgraph-status-running rect,
+.tgraph-status-running polygon,
+.tgraph-status-running circle,
+.tgraph-status-running ellipse,
+.tgraph-status-running path {
+  stroke: var(--accent);
+}
+
+.tgraph-status-done rect,
+.tgraph-status-done polygon,
+.tgraph-status-done circle,
+.tgraph-status-done ellipse,
+.tgraph-status-done path {
+  stroke: var(--accent-dim);
+}
+
+.tgraph-status-failed rect,
+.tgraph-status-failed polygon,
+.tgraph-status-failed circle,
+.tgraph-status-failed ellipse,
+.tgraph-status-failed path {
+  stroke: var(--error);
+}
+
+.tgraph-status-blocked rect,
+.tgraph-status-blocked polygon,
+.tgraph-status-blocked circle,
+.tgraph-status-blocked ellipse,
+.tgraph-status-blocked path {
+  stroke: var(--warn);
+}
+
+@keyframes tgraph-enter-kf {
+  0% {
+    opacity: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes tgraph-pulse-kf {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  50% {
+    filter: drop-shadow(0 0 7px var(--accent));
+  }
+}
+
+g.node.tgraph-enter {
+  animation: tgraph-enter-kf 700ms ease-out;
+}
+
+g.node.tgraph-pulse {
+  animation: tgraph-pulse-kf 700ms ease-in-out;
+}
+
+polyline.edge.tgraph-enter {
+  animation: tgraph-enter-kf 500ms ease-out;
+}
+
+.task-graph-footer {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.task-footer-brand {
+  color: var(--accent);
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.task-footer-path {
+  color: var(--fg-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-footer-model {
+  color: var(--warn);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

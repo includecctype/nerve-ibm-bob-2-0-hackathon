@@ -23,15 +23,10 @@ import {
   startNewSession,
 } from "./command/session_command";
 import { SuggestionBox } from "./command/suggestion_box";
-import type {
-  DisplayHistoryDTO,
-  QuestionnaireAnswerDTO,
-  StructuredQuestionDTO,
-  TaskCategoryDTO,
-} from "./dto/wire";
+import type { DisplayHistoryDTO, QuestionnaireAnswerDTO, StructuredQuestionDTO } from "./dto/wire";
 import { useBracketedPaste } from "./hooks/use_bracketed_paste";
 import { useLayout, useScreenSize, WINDOW_PAD } from "./hooks/use_layout";
-import { useMouse } from "./hooks/use_mouse";
+import { useMouseWheel } from "./hooks/use_mouse_wheel";
 import { readConfig } from "./save/config_reader";
 import { saveDisplayHistory } from "./save/config_writer";
 import { ensureConfigFile } from "./save/create_config_file";
@@ -54,7 +49,6 @@ import { QUESTION_PREFIX } from "./ui/display_entry";
 import { LogoView } from "./ui/logo_view";
 import { PromptBox } from "./ui/prompt_box";
 import { SAMPLE_HINT_MS, SampleHintBox } from "./ui/sample_hint_box";
-import { TaskPane } from "./ui/task_pane";
 import {
   displayRowsFromEntries,
   flattenDisplayEntries,
@@ -70,10 +64,7 @@ export function App() {
   const [logo_show, setLogoShow] = useState(true);
 
   const [displays, setDisplays] = useState<DisplayHistoryDTO[]>([]);
-  const [tasks, setTasks] = useState<TaskCategoryDTO[]>([]);
   const [display_scroll, setDisplayScroll] = useState(0);
-  const [task_scroll, setTaskScroll] = useState(0);
-  const [task_h_scroll, setTaskHScroll] = useState(0);
   const [sample_hint_visible, setSampleHintVisible] = useState(false);
   const [, setConnectionStatus] = useState<boolean>(false);
 
@@ -97,12 +88,6 @@ export function App() {
   const demo_running_ref = useRef(false);
   const settle_ref = useRef(createSettleWaiter());
   const questionnaire_active_ref = useRef(false);
-  const task_drag_ref = useRef<{
-    x: number;
-    y: number;
-    scroll: number;
-    h_scroll: number;
-  } | null>(null);
   const sample_hint_timer_ref = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { height: screen_height, width: screen_width } = useScreenSize();
@@ -114,15 +99,9 @@ export function App() {
   const {
     inner_width,
     inner_height,
-    show_task_bar,
-    task_pane_width,
-    chat_gap,
     chat_pane_width,
     chat_content_width,
-    task_gutter_width,
-    task_text_width,
     logo_prompt_width,
-    task_viewport_rows,
     prompt_max_rows,
     prompt_box_height,
     display_viewport_rows,
@@ -139,9 +118,6 @@ export function App() {
     questionnaire_free_text,
     questionnaire_draft,
   });
-
-  const status_cwd = "web workspace";
-  const status_model_label = user_data ? getModelLabel(user_data.main_agent_id) : "—";
 
   useEffect(() => {
     questions_ref.current = questions;
@@ -167,12 +143,6 @@ export function App() {
   const scrollChat = (delta: number) => {
     setDisplayScroll((prev) => Math.max(0, Math.min(chat_window.maxScroll, prev + delta)));
   };
-  const scrollTasks = (delta: number) => {
-    setTaskScroll((prev) => Math.max(0, prev + delta));
-  };
-  const clampTaskScroll = useCallback((max_scroll: number) => {
-    setTaskScroll((prev) => Math.min(prev, max_scroll));
-  }, []);
 
   const cancelActiveCommand = () => {
     setCommandMode({ type: "none" });
@@ -235,11 +205,7 @@ export function App() {
         return;
       }
 
-      if (key.ctrl && key.upArrow) {
-        scrollTasks(-1);
-      } else if (key.ctrl && key.downArrow) {
-        scrollTasks(1);
-      } else if (key.pageUp) {
+      if (key.pageUp) {
         scrollChat(display_viewport_rows);
       } else if (key.pageDown) {
         scrollChat(-display_viewport_rows);
@@ -259,44 +225,13 @@ export function App() {
   );
 
   useBracketedPaste();
-  useMouse(
-    !logo_show,
-    (direction, x) => {
-      if (command_mode.type !== "none") {
-        return;
-      }
-      const over_tasks = show_task_bar && x > chat_pane_width;
-      const delta = direction === "up" ? 3 : -3;
-      if (over_tasks) {
-        scrollTasks(-delta);
-      } else {
-        scrollChat(delta);
-      }
-    },
-    (phase, x, y) => {
-      if (command_mode.type !== "none" || questionnaire_active) {
-        return;
-      }
-      if (phase === "start") {
-        if (!show_task_bar || x <= chat_pane_width) {
-          task_drag_ref.current = null;
-          return;
-        }
-        task_drag_ref.current = { x, y, scroll: task_scroll, h_scroll: task_h_scroll };
-        return;
-      }
-      if (phase === "end") {
-        task_drag_ref.current = null;
-        return;
-      }
-      const drag = task_drag_ref.current;
-      if (!drag) {
-        return;
-      }
-      setTaskScroll(Math.max(0, drag.scroll + (drag.y - y)));
-      setTaskHScroll(Math.max(0, drag.h_scroll + (drag.x - x)));
-    },
-  );
+  useMouseWheel(!logo_show, (direction) => {
+    if (command_mode.type !== "none") {
+      return;
+    }
+    const delta = direction === "up" ? 3 : -3;
+    scrollChat(delta);
+  });
 
   const handleInputChange = (value: string) => {
     setInputValue(value);
@@ -318,10 +253,7 @@ export function App() {
       await ensureConfigFile();
       const data = await readConfig();
       setUserData(data);
-      setTasks(user_data?.categories ?? []);
       setDisplayScroll(0);
-      setTaskScroll(0);
-      setTaskHScroll(0);
       connectSocket();
     })();
   }, []);
@@ -334,7 +266,6 @@ export function App() {
     });
     onTaskUpdate(() => {
       settle_ref.current.noteActivity();
-      setTasks(user_data?.categories ?? []);
     });
     // Display-only progress line — sub-agent reports never reach the main agent.
     onSubagentResponse((data) => {
@@ -489,18 +420,12 @@ export function App() {
     if (option.session_id === null || !option.data) {
       await startNewSession();
       setDisplays([]);
-      setTasks([]);
       setDisplayScroll(0);
-      setTaskScroll(0);
-      setTaskHScroll(0);
       appendSystemNote("Started new session");
     } else {
       await applySessionChoice(option.session_id, option.data);
       setDisplays(option.data.history);
-      setTasks(user_data?.categories ?? []);
       setDisplayScroll(0);
-      setTaskScroll(0);
-      setTaskHScroll(0);
       appendSystemNote(`Loaded session ${option.session_id}`);
     }
     finishSessionSwitch();
@@ -605,10 +530,7 @@ export function App() {
       void (async () => {
         await restartConnection();
         setDisplays([]);
-        setTasks([]);
         setDisplayScroll(0);
-        setTaskScroll(0);
-        setTaskHScroll(0);
         setQuestions([]);
         setAnswers([]);
         setCurrentQuestion(0);
@@ -709,13 +631,7 @@ export function App() {
         width={screen_width}
         height={screen_height}
       >
-        <Box
-          width={chat_pane_width}
-          height="100%"
-          flexDirection="column"
-          display="flex"
-          marginRight={chat_gap}
-        >
+        <Box width={chat_pane_width} height="100%" flexDirection="column" display="flex">
           <ChatViewport
             chatBlocks={chat_blocks}
             displayScroll={display_scroll}
@@ -774,20 +690,6 @@ export function App() {
             )}
           </Box>
         </Box>
-        {show_task_bar && (
-          <TaskPane
-            tasks={tasks}
-            taskScroll={task_scroll}
-            taskHScroll={task_h_scroll}
-            viewportRows={task_viewport_rows}
-            textWidth={task_text_width}
-            taskGutterWidth={task_gutter_width}
-            width={task_pane_width}
-            cwd={status_cwd}
-            modelLabel={status_model_label}
-            onScrollClamp={clampTaskScroll}
-          />
-        )}
         {command_overlay}
         {sample_hint_visible && !logo_show && (
           <SampleHintBox screenWidth={inner_width} screenHeight={inner_height} />

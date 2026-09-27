@@ -4,6 +4,7 @@ import { FileViewer } from "./file_viewer/file_viewer.js";
 import { useSessionFolder } from "./storage/storage_store.js";
 import { App } from "./terminal/app.js";
 import { InkXterm } from "./terminal/xterm_host.js";
+import { TaskGraphView } from "./task_graph/task_graph_view.js";
 import "@xterm/xterm/css/xterm.css";
 import "./styles/ide_shell.css";
 import type { ITerminalOptions } from "@xterm/xterm";
@@ -55,9 +56,12 @@ export function IdeShell() {
           <FileViewer path={selected_path} />
         </section>
         <section className="ide-pane ide-terminal" aria-label="Terminal">
-          <InkXterm focus termOptions={TERMINAL_OPTIONS}>
-            <App />
-          </InkXterm>
+          <div className="ide-terminal-pane">
+            <InkXterm focus termOptions={TERMINAL_OPTIONS}>
+              <App />
+            </InkXterm>
+          </div>
+          <TaskGraphView />
         </section>
       </main>
     </div>

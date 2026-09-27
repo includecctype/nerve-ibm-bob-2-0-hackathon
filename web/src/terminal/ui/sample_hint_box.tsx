@@ -4,8 +4,8 @@ import { CommandPickerBox, CommandPickerOverlay } from "../command/command_picke
 export const SAMPLE_HINT_MS = 12000;
 
 const TIPS = [
-  "Task graph morph — nodes appear, statuses pulse, removed work fades out",
-  "Pan the graph — drag inside the Tasks pane (or Ctrl+↑/↓ / mouse wheel)",
+  "Task graph morph — watch nodes appear and pulse in the Task graph pane",
+  "Explore the graph — drag to pan, scroll to zoom, hover a node for its tasks",
   "Incremental re-planning — type a prompt mid-run; running work is never interrupted",
 ];
 

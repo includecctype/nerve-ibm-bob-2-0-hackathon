@@ -65,6 +65,11 @@
   min-width: 0;
 }
 
+.ide-terminal > .task-graph {
+  flex: 0 0 clamp(240px, 32%, 460px);
+  min-width: 240px;
+}
+
 @media (max-width: 900px) {
   .ide-body {
     grid-template-columns: 1fr;
@@ -73,5 +78,16 @@
       "explorer"
       "viewer"
       "terminal";
+  }
+
+  .ide-terminal {
+    flex-direction: column;
+  }
+
+  .ide-terminal > .task-graph {
+    flex: 1 1 auto;
+    min-width: 0;
+    border-left: none;
+    border-top: 1px solid var(--border);
   }
 }
