@@ -9,7 +9,7 @@ import { wrapLines } from "../ui/text_window";
 
 export const LOGO_PROMPT_WIDTH = 60;
 const MIN_TASK_W = 20;
-const MAX_TASK_W = 40;
+const MAX_TASK_W = 48;
 export const WINDOW_PAD = 1;
 
 type LayoutParams = {

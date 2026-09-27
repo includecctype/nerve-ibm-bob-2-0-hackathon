@@ -1,5 +1,5 @@
 import { Box, Text, useInput } from "ink";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { filterCommands, isSlashCommand } from "./command/command_list";
 import type { CommandMode } from "./command/command_mode";
 import { exitApp, isExitCommand } from "./command/exit_command";
@@ -31,7 +31,7 @@ import type {
 } from "./dto/wire";
 import { useBracketedPaste } from "./hooks/use_bracketed_paste";
 import { useLayout, useScreenSize, WINDOW_PAD } from "./hooks/use_layout";
-import { useMouseWheel } from "./hooks/use_mouse_wheel";
+import { useMouse } from "./hooks/use_mouse";
 import { readConfig } from "./save/config_reader";
 import { saveDisplayHistory } from "./save/config_writer";
 import { ensureConfigFile } from "./save/create_config_file";
@@ -53,13 +53,12 @@ import { CommandOverlay } from "./ui/command_overlay";
 import { QUESTION_PREFIX } from "./ui/display_entry";
 import { LogoView } from "./ui/logo_view";
 import { PromptBox } from "./ui/prompt_box";
-import { buildTaskLines, TaskPane } from "./ui/task_pane";
+import { TaskPane } from "./ui/task_pane";
 import {
   displayRowsFromEntries,
   flattenDisplayEntries,
   groupRowsIntoBlocks,
   windowFromBottom,
-  windowFromTop,
 } from "./ui/text_window";
 import { BG_BLACK, BG_PANEL } from "./ui/theme";
 import "./socket/listener";
@@ -73,6 +72,7 @@ export function App() {
   const [tasks, setTasks] = useState<TaskCategoryDTO[]>([]);
   const [display_scroll, setDisplayScroll] = useState(0);
   const [task_scroll, setTaskScroll] = useState(0);
+  const [task_h_scroll, setTaskHScroll] = useState(0);
   const [, setConnectionStatus] = useState<boolean>(false);
 
   const [questions, setQuestions] = useState<StructuredQuestionDTO[]>([]);
@@ -95,6 +95,12 @@ export function App() {
   const demo_running_ref = useRef(false);
   const settle_ref = useRef(createSettleWaiter());
   const questionnaire_active_ref = useRef(false);
+  const task_drag_ref = useRef<{
+    x: number;
+    y: number;
+    scroll: number;
+    h_scroll: number;
+  } | null>(null);
 
   const { height: screen_height, width: screen_width } = useScreenSize();
 
@@ -148,25 +154,22 @@ export function App() {
   );
   const chat_rows = useMemo(() => displayRowsFromEntries(chat_lines), [chat_lines]);
 
-  const task_lines = useMemo(
-    () => buildTaskLines(tasks, task_text_width),
-    [tasks, task_text_width],
-  );
-
   const chat_window = windowFromBottom(
     chat_rows,
     display_viewport_rows - (display_scroll > 0 ? 1 : 0),
     display_scroll,
   );
   const chat_blocks = groupRowsIntoBlocks(chat_window.visible);
-  const task_window = windowFromTop(task_lines, task_viewport_rows, task_scroll);
 
   const scrollChat = (delta: number) => {
     setDisplayScroll((prev) => Math.max(0, Math.min(chat_window.maxScroll, prev + delta)));
   };
   const scrollTasks = (delta: number) => {
-    setTaskScroll((prev) => Math.max(0, Math.min(task_window.maxScroll, prev + delta)));
+    setTaskScroll((prev) => Math.max(0, prev + delta));
   };
+  const clampTaskScroll = useCallback((max_scroll: number) => {
+    setTaskScroll((prev) => Math.min(prev, max_scroll));
+  }, []);
 
   const cancelActiveCommand = () => {
     setCommandMode({ type: "none" });
@@ -234,18 +237,44 @@ export function App() {
   );
 
   useBracketedPaste();
-  useMouseWheel(!logo_show, (direction, x) => {
-    if (command_mode.type !== "none") {
-      return;
-    }
-    const over_tasks = show_task_bar && x > chat_pane_width;
-    const delta = direction === "up" ? 3 : -3;
-    if (over_tasks) {
-      scrollTasks(-delta);
-    } else {
-      scrollChat(delta);
-    }
-  });
+  useMouse(
+    !logo_show,
+    (direction, x) => {
+      if (command_mode.type !== "none") {
+        return;
+      }
+      const over_tasks = show_task_bar && x > chat_pane_width;
+      const delta = direction === "up" ? 3 : -3;
+      if (over_tasks) {
+        scrollTasks(-delta);
+      } else {
+        scrollChat(delta);
+      }
+    },
+    (phase, x, y) => {
+      if (command_mode.type !== "none" || questionnaire_active) {
+        return;
+      }
+      if (phase === "start") {
+        if (!show_task_bar || x <= chat_pane_width) {
+          task_drag_ref.current = null;
+          return;
+        }
+        task_drag_ref.current = { x, y, scroll: task_scroll, h_scroll: task_h_scroll };
+        return;
+      }
+      if (phase === "end") {
+        task_drag_ref.current = null;
+        return;
+      }
+      const drag = task_drag_ref.current;
+      if (!drag) {
+        return;
+      }
+      setTaskScroll(Math.max(0, drag.scroll + (drag.y - y)));
+      setTaskHScroll(Math.max(0, drag.h_scroll + (drag.x - x)));
+    },
+  );
 
   const handleInputChange = (value: string) => {
     setInputValue(value);
@@ -270,6 +299,7 @@ export function App() {
       setTasks(user_data?.categories ?? []);
       setDisplayScroll(0);
       setTaskScroll(0);
+      setTaskHScroll(0);
       connectSocket();
     })();
   }, []);
@@ -440,6 +470,7 @@ export function App() {
       setTasks([]);
       setDisplayScroll(0);
       setTaskScroll(0);
+      setTaskHScroll(0);
       appendSystemNote("Started new session");
     } else {
       await applySessionChoice(option.session_id, option.data);
@@ -447,6 +478,7 @@ export function App() {
       setTasks(user_data?.categories ?? []);
       setDisplayScroll(0);
       setTaskScroll(0);
+      setTaskHScroll(0);
       appendSystemNote(`Loaded session ${option.session_id}`);
     }
     finishSessionSwitch();
@@ -552,6 +584,7 @@ export function App() {
         setTasks([]);
         setDisplayScroll(0);
         setTaskScroll(0);
+        setTaskHScroll(0);
         setQuestions([]);
         setAnswers([]);
         setCurrentQuestion(0);
@@ -719,12 +752,16 @@ export function App() {
         </Box>
         {show_task_bar && (
           <TaskPane
-            taskWindow={task_window}
+            tasks={tasks}
             taskScroll={task_scroll}
+            taskHScroll={task_h_scroll}
+            viewportRows={task_viewport_rows}
+            textWidth={task_text_width}
             taskGutterWidth={task_gutter_width}
             width={task_pane_width}
             cwd={status_cwd}
             modelLabel={status_model_label}
+            onScrollClamp={clampTaskScroll}
           />
         )}
         {command_overlay}
