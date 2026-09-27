@@ -12,7 +12,6 @@ from ai_tool.task.emit.planning_placeholder import emitPlanningPlaceholder
 from ai_tool.task.emit.task import updateTaskDisplay
 from ai_tool.task.task_graph import buildStatusMap, cascadeBlocked
 from ai_tool.tool_registry import getMainAgentTools
-from gateway.agent.invoke_main_agent import invokeMainAgent
 from gateway.config import AgentBinding, ConnectedUserMemory, connected_users, sio
 from gateway.dto.legacy_task_migration import normalizeLegacyTasks
 from gateway.dto.task_auth import normalizeCategories, splitCategories
@@ -20,6 +19,14 @@ from gateway.prompt.questionnaire import QUESTIONNAIRE_SYSTEM
 from gateway.prompt.user_prompt import USER_PROMPT_SYSTEM
 from gateway.ratelimit.inbound_limiter import clientIp, connect_limiter, prompt_limiter
 from gateway.retry.agent_error import clearErrorState, resetErrorBounce
+from gateway.state.prompt_queue import (
+    PROMPT_KIND_GIVE_UP,
+    PROMPT_KIND_QUESTIONNAIRE,
+    PROMPT_KIND_USER,
+    enqueuePrompt,
+    startPromptQueue,
+    stopPromptQueue,
+)
 from gateway.state.runtime_state import exec_locks, sid_locks
 from model.main_agent import createMainAgent
 from model.model_client import PROVIDED_AGENT_ID, providedModelKey
@@ -119,6 +126,9 @@ async def connect(sid: str, environ: dict, auth: dict | None) -> None:
             storage_folder=storage_folder,
         )
 
+        # Prompts are handled by one worker per session so turns never overlap.
+        startPromptQueue(sid)
+
         # Publish the normalised graph (running downgraded to pending) so a
         # reconnecting client renders the restored state instead of stale statuses.
         await updateTaskDisplay(sid, connected_users)
@@ -151,7 +161,8 @@ async def user_prompt(sid: str, data: str) -> None:
         mem.pending_categories + mem.running_categories + mem.completed_categories,
     )
 
-    await invokeMainAgent(sid, USER_PROMPT_SYSTEM, str(data))
+    depth = enqueuePrompt(sid, USER_PROMPT_SYSTEM, str(data), PROMPT_KIND_USER)
+    logger.info("[prompt] queued sid=%s kind=user depth=%d", sid, depth)
 
 
 @sio.event
@@ -178,7 +189,8 @@ async def questionnaire_answers(sid: str, data: list) -> None:
             lines.append(f"Q: {q}\nA: {a}")
     formatted = "\n\n".join(lines) if lines else str(data)
 
-    await invokeMainAgent(sid, QUESTIONNAIRE_SYSTEM, formatted)
+    depth = enqueuePrompt(sid, QUESTIONNAIRE_SYSTEM, formatted, PROMPT_KIND_QUESTIONNAIRE)
+    logger.info("[prompt] queued sid=%s kind=questionnaire depth=%d", sid, depth)
 
 
 @sio.event
@@ -196,7 +208,8 @@ async def agent_error_response(sid: str, data: str) -> None:
         await sio.emit("main_agent_response", str(data), to=sid)
         return
 
-    await invokeMainAgent(sid, GIVE_UP_SYSTEM_PROMPT, str(data))
+    depth = enqueuePrompt(sid, GIVE_UP_SYSTEM_PROMPT, str(data), PROMPT_KIND_GIVE_UP)
+    logger.info("[prompt] queued sid=%s kind=give_up depth=%d", sid, depth)
 
 
 @sio.event
@@ -213,6 +226,10 @@ async def disconnect(sid: str) -> None:
     logger.info("[disconnect] sid=%s", sid)
 
     await cancelPendingRequests(sid)
+
+    # Stop the prompt worker before the session is removed, so it never runs a
+    # queued turn against a session that is already gone.
+    await stopPromptQueue(sid)
 
     connected_users.pop(sid, None)
 

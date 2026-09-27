@@ -25,19 +25,13 @@ def getMainAgentTools(sid: str) -> list[Any]:
     """
     from ai_tool.task.tool import makeTaskTools
     from gateway.retry.rate_limit import callWithRateLimitRetry
-    from gateway.state.session_locks import (
-        execSidLock,
-        reacquirePromptAfterExecute,
-        releasePromptTemporarily,
-    )
+    from gateway.state.session_locks import execSidLock
 
     process_new_task, execute_current_task, check_running_tasks = makeTaskTools(
         sid=sid,
         create_sub_agent_fn=createSubAgentWithTools,
         call_with_retry_fn=callWithRateLimitRetry,
         exec_lock_fn=execSidLock,
-        release_prompt_fn=releasePromptTemporarily,
-        reacquire_prompt_fn=reacquirePromptAfterExecute,
     )
     return [
         makeQuestionTool(sid),

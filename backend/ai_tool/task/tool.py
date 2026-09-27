@@ -30,8 +30,6 @@ def makeTaskTools(
     create_sub_agent_fn,
     call_with_retry_fn,
     exec_lock_fn,
-    release_prompt_fn,
-    reacquire_prompt_fn,
 ):
     @tool
     async def processNewTask(categories: list[dict]) -> str:
@@ -106,9 +104,7 @@ def makeTaskTools(
             return "Error: execution already in progress for this session."
 
         await exec_lock.acquire()
-        released_prompt = False
         try:
-            released_prompt = await release_prompt_fn(sid)
             stats = await runTaskGraph(
                 sid=sid,
                 connected_users=connected_users,
@@ -118,8 +114,6 @@ def makeTaskTools(
             )
         finally:
             exec_lock.release()
-            if released_prompt:
-                await reacquire_prompt_fn(sid)
 
         parts: list[str] = []
         if stats["done"]:
