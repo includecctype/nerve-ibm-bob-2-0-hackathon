@@ -21,6 +21,8 @@ Exact commands and files for running, checking, and deploying the project.
 | `NERVE_BACKEND_URL` | CLI (`terminal/src/socket/client.ts`), web (`web/src/terminal/socket/client.ts`) | gateway URL |
 | `WEB_ALLOWED_ORIGINS` | backend (`gateway/config.py`) | comma-separated browser origins allowed to connect; defaults to any (`*`) |
 | `PROVIDED_MODEL_KEY` | backend (`model/model_client.py`) | operator-funded key for model 6 (DeepSeek Flash, web-only); used server-side and never sent to clients |
+| `WATSONX_API_KEY` / `WATSONX_PROJECT_ID` | backend (`model/model_client.py`) | watsonx.ai credentials for model 1 (IBM Granite, operator-funded); used server-side and never sent to clients |
+| `WATSONX_URL` | backend (`model/model_client.py`) | watsonx.ai endpoint (defaults to `https://us-south.ml.cloud.ibm.com`) |
 | `OCI_TENANCY` / `OCI_USER` / `OCI_FINGERPRINT` / `OCI_REGION` | backend (`storage/oci/oci_client.py`) | OCI API-key identity and region |
 | `OCI_KEY_FILE` / `OCI_KEY_CONTENT` | backend (`storage/oci/oci_client.py`) | private key: a mounted PEM path, or inline PEM with `\n` escapes |
 | `OCI_PRIVATE_KEY_PASSPHRASE` | backend (`storage/oci/oci_client.py`) | passphrase for an encrypted private key (optional) |

@@ -30,15 +30,17 @@ Root: `backend/`. Python `>=3.13`, managed with **uv**. For behavior see
 
 | File | Responsibility | Key symbols |
 |---|---|---|
-| `model/model_client.py` | Build a cached chat model and a LangChain agent; provided-model key; tool-error middleware | `initModel`, `buildAgent`, `toolErrorMiddleware`, `model_cache`, `PROVIDER_MAP`, `providedModelKey`, `PROVIDED_AGENT_ID` |
-| `model/main_agent.py` | Main agent factory (agent ids 1–6) | `createMainAgent` |
+| `model/model_client.py` | Build a cached chat model and a LangChain agent; provided-model and watsonx keys; tool-error middleware | `initModel`, `buildAgent`, `toolErrorMiddleware`, `model_cache`, `PROVIDER_MAP`, `providedModelKey`, `PROVIDED_AGENT_ID`, `WATSONX_AGENT_ID`, `watsonxSettings` |
+| `model/main_agent.py` | Main agent factory (agent ids 1–7) | `createMainAgent` |
 | `model/sub_agent.py` | Sub-agent factory (same ids) | `createSubAgent` |
 | `model/agent_session.py` | Thin wrapper around a compiled agent + `thread_id` | `AgentSession` |
 
-`initModel` provider map (`agent_id → provider/model`): 1 OpenRouter `auto`,
-2 Groq `openai/gpt-oss-120b`, 3 Anthropic `claude-fable-5`, 4 Baseten
+`initModel` provider map (`agent_id → provider/model`): 1 IBM
+`ibm/granite-3-3-8b-instruct` (watsonx.ai, operator-funded), 2 Groq
+`openai/gpt-oss-120b`, 3 Anthropic `claude-fable-5`, 4 Baseten
 `moonshotai/Kimi-K2.6`, 5 DeepSeek `deepseek-chat`, 6 DeepSeek `deepseek-flash`
-(provided, web-only). Models are cached by `(agent_id, api_key)`.
+(provided, web-only), 7 OpenRouter `auto`. Models are cached by
+`(agent_id, api_key)`.
 
 ## Task graph & scheduling (`ai_tool/task/`)
 

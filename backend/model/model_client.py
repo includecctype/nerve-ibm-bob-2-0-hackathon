@@ -15,13 +15,13 @@ from model.agent_session import AgentSession
 model_cache: dict[tuple[int, str], BaseChatModel] = {}
 
 PROVIDER_MAP = {
-    1: ("openrouter", "auto"),
+    1: ("ibm", "ibm/granite-3-3-8b-instruct"),
     2: ("groq", "openai/gpt-oss-120b"),
     3: ("anthropic", "claude-fable-5"),
     4: ("baseten", "moonshotai/Kimi-K2.6"),
     5: ("deepseek", "deepseek-chat"),
     6: ("deepseek", "deepseek-flash"),
-    7: ("ibm", "ibm/granite-3-3-8b-instruct"),
+    7: ("openrouter", "auto"),
 }
 
 # Model 6 is "provided" and web-only: the operator funds it, so its key comes
@@ -30,9 +30,9 @@ PROVIDER_MAP = {
 PROVIDED_AGENT_ID = 6
 PROVIDED_MODEL_ENV = "PROVIDED_MODEL_KEY"
 
-# Model 7 runs IBM Granite through watsonx.ai. The operator funds it too: the
+# Model 1 runs IBM Granite through watsonx.ai. The operator funds it too: the
 # credentials always come from the environment, so clients never handle them.
-WATSONX_AGENT_ID = 7
+WATSONX_AGENT_ID = 1
 WATSONX_API_KEY_ENV = "WATSONX_API_KEY"
 WATSONX_PROJECT_ENV = "WATSONX_PROJECT_ID"
 WATSONX_URL_ENV = "WATSONX_URL"
