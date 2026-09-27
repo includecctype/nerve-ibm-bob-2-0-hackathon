@@ -1,7 +1,11 @@
 import { io, type Socket } from "socket.io-client";
 import { user_data } from "../session/user_data";
 
-export const BACKEND_URL = process.env.NERVE_BACKEND_URL ?? "https://nerve-boq5.onrender.com";
+export const BACKEND_URL =
+  process.env.NERVE_BACKEND_URL ??
+  (typeof NERVE_DEFAULT_BACKEND_URL !== "undefined"
+    ? NERVE_DEFAULT_BACKEND_URL
+    : "http://localhost:8000");
 
 export const socket: Socket = io(BACKEND_URL, {
   autoConnect: false,

@@ -126,8 +126,10 @@ cd backend  && uv sync --all-extras && uv run ruff check . && uv run black --che
 - **Backend:** any Docker host. Reference deployment:
   `https://nerve-ibm-bob-2-0-hackathon.onrender.com`. Secrets (`WEB_SEARCH_API`,
   `PROVIDED_MODEL_KEY`, OCI credentials) are injected by the host or Doppler.
-- **CLI:** publish the built `dist/app.js` as `nerves-cli`; users install it and
-  run `nerve`.
+- **CLI:** publish the built `dist/app.js` as `nervous-cli`; `tsup` bakes the
+  gateway URL from `NERVE_BACKEND_URL` at build time (default:
+  `https://nerve-ibm-bob-2-0-hackathon.onrender.com`). Users install it and run
+  `nerve`, overriding the baked URL with `NERVE_BACKEND_URL` at runtime.
 - **Web:** `pnpm build` then upload `web/dist`; `.github/workflows/web-pages.yml`
   deploys to GitHub Pages on pushes that touch `web/`.
 

@@ -90,7 +90,7 @@ of 10 MB, killing the child at the timeout.
 
 | Var | Purpose | Default |
 |---|---|---|
-| `NERVE_BACKEND_URL` | Backend Socket.IO URL | the CLI's built-in deployment fallback when unset |
+| `NERVE_BACKEND_URL` | Backend Socket.IO URL | the gateway URL baked in at build time (reference deployment by default) |
 
 Set `NERVE_BACKEND_URL` explicitly to target a gateway, e.g.
 `https://nerve-ibm-bob-2-0-hackathon.onrender.com` (reference deployment) or
@@ -104,4 +104,7 @@ web-only.
 ## Build & packaging
 
 `tsup.config.ts` bundles `src/app.tsx` to ESM with a `#!/usr/bin/env node`
-banner; `package.json` maps `bin.nerve` → `./dist/app.js`.
+banner; `package.json` maps `bin.nerve` → `./dist/app.js`. The backend URL is
+inlined by the `define` in `tsup.config.ts`: `NERVE_BACKEND_URL` at build time,
+or the reference deployment when unset. At runtime `NERVE_BACKEND_URL` still
+overrides the baked value; `pnpm dev` falls back to `http://localhost:8000`.
