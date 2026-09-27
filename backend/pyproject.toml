@@ -11,6 +11,7 @@ dependencies = [
     "langchain-anthropic",
     "langchain-baseten",
     "langchain-deepseek",
+    "langchain-ibm",
     "langgraph",
     "openai>=3.14.0",
     "httpx",
