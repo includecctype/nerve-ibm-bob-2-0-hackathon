@@ -40,6 +40,7 @@ import {
   onDisplay,
   onError,
   onQuestionnaire,
+  onRateLimited,
   onSubagentResponse,
   onTaskUpdate,
 } from "./socket/handler_registry";
@@ -305,6 +306,12 @@ export function App() {
     });
     onError((message) => {
       setDisplays((prev) => [...prev, { role: "error", content: message }]);
+    });
+    onRateLimited((data) => {
+      setDisplays((prev) => [
+        ...prev,
+        { role: "error", content: `Rate limited — try again in ${data.retry_after}s` },
+      ]);
     });
   }, []);
 

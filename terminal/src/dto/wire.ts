@@ -39,6 +39,10 @@ export type SubagentResponseDTO = {
   report: string;
 };
 
+export type RateLimitedDTO = {
+  retry_after: number;
+};
+
 // Backend forwards file/shell tool calls here; they run on this machine.
 export type ToolRequestDTO = {
   id: string;

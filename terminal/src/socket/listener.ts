@@ -8,6 +8,7 @@ import {
   display_handler,
   error_handler,
   questionnaire_handler,
+  rate_limited_handler,
   subagent_response_handler,
   task_update_handler,
 } from "./handler_registry";
@@ -38,6 +39,10 @@ socket.on("questionnaire", (data) => {
 socket.on("agent_error", (data: string) => {
   error_handler?.(data);
   emitAgentErrorResponse(data);
+});
+
+socket.on("rate_limited", (data) => {
+  rate_limited_handler?.(data);
 });
 
 // Backend forwarded a file/shell call: it executes here, on this machine.
