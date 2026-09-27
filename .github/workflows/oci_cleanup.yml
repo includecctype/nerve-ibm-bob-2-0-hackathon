@@ -2,7 +2,7 @@ name: OCI Session Cleanup
 
 on:
   schedule:
-    - cron: "0 */6 * * *"
+    - cron: "0 */2 * * *"
   workflow_dispatch:
 
 jobs:
@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: "3.13"
       - run: uv sync --frozen
-      - name: Delete session folders older than 6 hours
+      - name: Delete session folders older than 2 hours
         run: uv run python -m storage.oci.cleanup
         env:
           OCI_TENANCY: ${{ secrets.OCI_TENANCY }}
