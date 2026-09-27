@@ -20,6 +20,7 @@ from gateway.prompt.user_prompt import USER_PROMPT_SYSTEM
 from gateway.retry.agent_error import clearErrorState, resetErrorBounce
 from gateway.state.runtime_state import exec_locks, sid_locks
 from model.main_agent import createMainAgent
+from model.model_client import PROVIDED_AGENT_ID, providedModelKey
 from storage.oci.session_folder import makeSessionFolder
 from storage.service import storage_service
 
@@ -37,12 +38,18 @@ async def connect(sid: str, environ: dict, auth: dict | None) -> None:
         await sio.emit("connection_status", False, to=sid)
         return
 
-    if not api_key or main_agent_id not in range(1, 6):
+    is_provided = main_agent_id == PROVIDED_AGENT_ID
+    if (not api_key and not is_provided) or main_agent_id not in range(1, 7):
         logger.warning("[connect] rejected sid=%s (bad auth)", sid)
         await sio.emit("connection_status", False, to=sid)
         return
 
     try:
+        # The provided model is funded by the operator, so its key comes from the
+        # environment; clients that select it may send an empty key.
+        if is_provided:
+            api_key = providedModelKey()
+
         # Restore task graph — prefer new categories shape, fall back to legacy flat lists
         all_categories = normalizeCategories(auth.get("categories"))
         if not all_categories:

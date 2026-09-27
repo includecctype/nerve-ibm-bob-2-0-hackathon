@@ -105,11 +105,15 @@ Models are selected by id (stored in `user_config/config.json`):
 
 | Id | Model |
 |---|---|
-| 1 | OpenRouter Auto |
-| 2 | Groq GPT-OSS 120B |
-| 3 | Claude Fable 5 |
-| 4 | Kimi K2.6 |
-| 5 | DeepSeek Chat |
+| 1 | DeepSeek Flash (provided) |
+| 2 | OpenRouter Auto |
+| 3 | Groq GPT-OSS 120B |
+| 4 | Claude Fable 5 |
+| 5 | Kimi K2.6 |
+| 6 | DeepSeek Chat |
+
+Model 1 is **provided**: the operator funds it via `PROVIDED_MODEL_KEY`, so
+clients that select it do not need their own key.
 
 **Keys**
 
@@ -186,6 +190,7 @@ enable Pages with the "GitHub Actions" source first.
 | `WEB_SEARCH_API` | backend (`backend/systemconfig/websearch.py`) | Exa key for `webSearch` / `webFetch` |
 | `NERVE_BACKEND_URL` | CLI (`terminal/src/socket/client.ts`) and web (`web/src/terminal/socket/client.ts`) | gateway URL; the CLI defaults to the public deployment, the web build to `http://localhost:8000` |
 | `WEB_ALLOWED_ORIGINS` | backend (`backend/gateway/config.py`) | comma-separated browser origins allowed to connect; defaults to any (`*`) |
+| `PROVIDED_MODEL_KEY` | backend (`backend/model/model_client.py`) | operator-funded key for model 1 (DeepSeek Flash); used server-side and never sent to clients |
 | `OCI_TENANCY` / `OCI_USER` / `OCI_FINGERPRINT` / `OCI_REGION` | backend (`backend/storage/oci/oci_client.py`) | OCI API-key identity and region |
 | `OCI_KEY_FILE` / `OCI_KEY_CONTENT` | backend (`backend/storage/oci/oci_client.py`) | private key: a mounted PEM path, or inline PEM with `\n` escapes |
 | `OCI_PRIVATE_KEY_PASSPHRASE` | backend (`backend/storage/oci/oci_client.py`) | passphrase for an encrypted private key (optional) |

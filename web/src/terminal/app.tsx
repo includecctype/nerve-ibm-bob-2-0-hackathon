@@ -43,7 +43,7 @@ import {
   onSubagentResponse,
   onTaskUpdate,
 } from "./socket/handler_registry";
-import { MODEL_OPTIONS } from "./systemconfig/model";
+import { MODEL_OPTIONS, isProvidedModel } from "./systemconfig/model";
 import { ChatViewport } from "./ui/chat_viewport";
 import { CommandOverlay } from "./ui/command_overlay";
 import { QUESTION_PREFIX } from "./ui/display_entry";
@@ -328,6 +328,11 @@ export function App() {
     const model = MODEL_OPTIONS.find((m) => m.id === option.modelId);
     if (!model) return;
 
+    if (isProvidedModel(model.id)) {
+      await finishModelSwitch(model.id, "");
+      return;
+    }
+
     if (hasApiKeyForModel(model.id)) {
       const existing_key = user_data?.api_keys[model.id];
       if (existing_key) {
@@ -348,6 +353,14 @@ export function App() {
     if (!option) return;
     const model = MODEL_OPTIONS.find((m) => m.id === option.modelId);
     if (!model) return;
+    if (isProvidedModel(model.id)) {
+      appendSystemNote("DeepSeek Flash (provided) needs no API key");
+      setCommandMode({ type: "none" });
+      setInputValue("");
+      setSelectedIdx(0);
+      setInputKey((prev) => prev + 1);
+      return;
+    }
     setCommandMode({
       type: "enter_api_key",
       modelId: model.id,

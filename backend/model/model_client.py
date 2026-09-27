@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import uuid
 from typing import Any
 
@@ -14,15 +15,31 @@ from model.agent_session import AgentSession
 model_cache: dict[tuple[int, str], BaseChatModel] = {}
 
 PROVIDER_MAP = {
-    1: ("openrouter", "auto"),
-    2: ("groq", "openai/gpt-oss-120b"),
-    3: ("anthropic", "claude-fable-5"),
-    4: ("baseten", "moonshotai/Kimi-K2.6"),
-    5: ("deepseek", "deepseek-chat"),
+    1: ("deepseek", "deepseek-flash"),
+    2: ("openrouter", "auto"),
+    3: ("groq", "openai/gpt-oss-120b"),
+    4: ("anthropic", "claude-fable-5"),
+    5: ("baseten", "moonshotai/Kimi-K2.6"),
+    6: ("deepseek", "deepseek-chat"),
 }
+
+# Model 1 is "provided": the operator funds it, so its key comes from the
+# environment instead of the client, and the funded key is never sent to clients.
+PROVIDED_AGENT_ID = 1
+PROVIDED_MODEL_ENV = "PROVIDED_MODEL_KEY"
+
+
+def providedModelKey() -> str:
+    key = os.getenv(PROVIDED_MODEL_ENV, "").strip()
+    if not key:
+        raise ValueError(f"{PROVIDED_MODEL_ENV} is not set")
+    return key
 
 
 def initModel(agent_id: int, api_key: str) -> BaseChatModel:
+    if agent_id == PROVIDED_AGENT_ID:
+        api_key = providedModelKey()
+
     cache_key = (agent_id, api_key)
     if cache_key in model_cache:
         return model_cache[cache_key]
