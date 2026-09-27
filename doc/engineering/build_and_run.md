@@ -135,8 +135,8 @@ cd backend  && uv sync --all-extras && uv run ruff check . && uv run black --che
 
 ## Session cleanup
 
-Web session folders older than 6 hours are removed by
-`.github/workflows/oci_cleanup.yml`, which runs every 6 hours on GitHub Actions
+Web session folders older than 2 hours are removed by
+`.github/workflows/oci_cleanup.yml`, which runs every 2 hours on GitHub Actions
 (and can be triggered manually). The module also runs standalone:
 
 ```bash

@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 # Web sessions live in "YYYY-MM-DD:<uuid>" folders; anything else is left alone.
 SESSION_FOLDER_PREFIX = re.compile(r"^(\d{4}-\d{2}-\d{2}):")
 
-SESSION_MAX_AGE_HOURS = 6
+SESSION_MAX_AGE_HOURS = 2
 LIST_PAGE_LIMIT = 500
 LIST_MAX_PAGES = 200
 
