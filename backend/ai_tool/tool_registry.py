@@ -19,20 +19,13 @@ def getMainAgentTools(sid: str) -> list[Any]:
     Return the tool set for the main orchestrator agent: the task-graph tools
     plus makeQuestion (no file/web execution — that is the sub-agents' job).
 
-    The graph tools are built by makeTaskTools and need the gateway-side helpers
-    (sub-agent factory, retry wrapper, locks), so they are resolved here rather
-    than at import time.
+    Execution runs in the background (see gateway.state.exec_scheduler), so
+    executeCurrentTask only starts or joins a pass; results are delivered later
+    as a prompt.
     """
     from ai_tool.task.tool import makeTaskTools
-    from gateway.retry.rate_limit import callWithRateLimitRetry
-    from gateway.state.session_locks import execSidLock
 
-    process_new_task, execute_current_task, check_running_tasks = makeTaskTools(
-        sid=sid,
-        create_sub_agent_fn=createSubAgentWithTools,
-        call_with_retry_fn=callWithRateLimitRetry,
-        exec_lock_fn=execSidLock,
-    )
+    process_new_task, execute_current_task, check_running_tasks = makeTaskTools(sid=sid)
     return [
         makeQuestionTool(sid),
         process_new_task,

@@ -12,25 +12,17 @@ from ai_tool.task.task_graph import (
     makeCategory,
     normalizeName,
     repairGraph,
-    truncateResult,
     validateCategoryInput,
     validateGraph,
 )
-from ai_tool.task.task_runner import runTaskGraph
 from gateway.config import connected_users
-from systemconfig.limits import SUBAGENT_TIMEOUT_SECONDS
 
 logger = logging.getLogger(__name__)
 
 # These are created per-session via makeTaskTools(sid)
 
 
-def makeTaskTools(
-    sid: str,
-    create_sub_agent_fn,
-    call_with_retry_fn,
-    exec_lock_fn,
-):
+def makeTaskTools(sid: str):
     @tool
     async def processNewTask(categories: list[dict]) -> str:
         """
@@ -86,66 +78,28 @@ def makeTaskTools(
     @tool
     async def executeCurrentTask() -> str:
         """
-        Execute the pending task graph to completion.
-        Runs ready categories in parallel; tasks sequential inside each category.
-        Returns a summary of done/failed/blocked counts and result excerpts.
+        Start (or join) background execution of the pending task graph.
+        Returns immediately; ready categories run in parallel, tasks sequential
+        inside each category, and results arrive later as a new message.
         """
         user = connected_users.get(sid)
         if user is None:
             return "Error: session not found"
 
+        from gateway.state.exec_scheduler import isExecutionRunning, startExecution
+
+        # A running pass owns the graph; new categories from processNewTask join it.
+        if isExecutionRunning(sid):
+            return "Execution already in progress; new categories join the running pass."
+
         if not user.pending_categories and not user.running_categories:
             return "No tasks to execute."
 
-        # One execution pass at a time per session: the main agent may issue this
-        # tool as a parallel call, and two passes would race on the shared graph.
-        exec_lock = exec_lock_fn(sid)
-        if exec_lock.locked():
-            return "Error: execution already in progress for this session."
-
-        await exec_lock.acquire()
-        try:
-            stats = await runTaskGraph(
-                sid=sid,
-                connected_users=connected_users,
-                create_sub_agent_fn=create_sub_agent_fn,
-                call_with_retry_fn=call_with_retry_fn,
-                subagent_timeout=SUBAGENT_TIMEOUT_SECONDS,
-            )
-        finally:
-            exec_lock.release()
-
-        parts: list[str] = []
-        if stats["done"]:
-            parts.append(f"completed: {', '.join(stats['done'])}")
-        if stats["failed"]:
-            parts.append(f"failed: {', '.join(stats['failed'])}")
-        if stats["blocked"]:
-            parts.append(f"blocked by failures: {', '.join(stats['blocked'])}")
-        summary = "; ".join(parts) if parts else "no categories ran"
-
-        # Result excerpts: reports never reach the main agent any other way, and
-        # only this pass's categories are reported.
-        detail_lines: list[str] = []
-        completed_lookup = {normalizeName(known.name): known for known in user.completed_categories}
-        for name in [*stats["done"], *stats["failed"]]:
-            known = completed_lookup.get(normalizeName(name))
-            if known is None:
-                continue
-            results = [truncateResult(task.result) for task in known.tasks if task.result]
-            detail = "; ".join(results) if results else "(no result captured)"
-            detail_lines.append(f"- {name}: {detail}")
-        details = "\n".join(detail_lines)
-
-        remaining = len(user.pending_categories)
-        if remaining:
-            outcome = f"{remaining} pending categor(ies) remain — call executeCurrentTask again."
-        else:
-            outcome = "No pending remain — summarize these results to the user."
-        body = f"Execution pass finished ({summary})."
-        if details:
-            body += f"\nCategory results:\n{details}"
-        return f"{body} {outcome}"
+        startExecution(sid)
+        return (
+            "Execution started in the background. Do not poll; the pass results "
+            "will be delivered to you as a new message to summarize."
+        )
 
     @tool
     async def checkRunningTasks() -> str:
