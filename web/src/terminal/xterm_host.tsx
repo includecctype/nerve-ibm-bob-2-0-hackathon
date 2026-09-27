@@ -7,8 +7,8 @@ import { Readable, Writable } from "node:stream";
 
 const CURSOR_HIDE = "\x1b[?25l";
 const CLEAR_TERMINAL = "\x1b[2J\x1b[3J\x1b[H";
-const CHAR_WIDTH = 9;
-const CHAR_HEIGHT = 17;
+const CHAR_WIDTH = 8;
+const CHAR_HEIGHT = 15;
 
 // Ink's unmount path relies on setImmediate, which browsers do not provide.
 const global_with_immediate = globalThis as {

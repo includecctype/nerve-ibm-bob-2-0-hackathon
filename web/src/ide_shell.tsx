@@ -9,6 +9,7 @@ import "./styles/ide_shell.css";
 import type { ITerminalOptions } from "@xterm/xterm";
 
 const TERMINAL_OPTIONS: ITerminalOptions = {
+  fontSize: 13,
   theme: {
     background: "#000000",
     foreground: "#00ff41",
