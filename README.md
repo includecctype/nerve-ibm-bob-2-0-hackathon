@@ -14,6 +14,11 @@ Most agents run a task list. nerve runs a graph that remembers.
 
 ![nerve — one living plan for your coding agents](doc/media/banner.svg)
 
+> **Try it in 30 seconds.** Open the [live web demo](https://includecctype.github.io/nerve-ibm-bob-2-0-hackathon/),
+> pick the provided model (6), and type **`/sample`**. Each scenario seeds a task graph, then
+> sends five follow-up prompts that **incrementally re-plan** it — work already running is never
+> interrupted.
+
 ## The problem: agents forget, and restarts waste work
 
 Today's coding agents treat every prompt as a fresh start:
@@ -70,6 +75,8 @@ prompt 3 · "actually, drop the session work"   (sent while login-fix is running
 Each prompt is planned immediately and folded into the same running plan. When the
 plan drains, nerve reports what finished — as its own message.
 
+Watch it live: the web workspace ships ten scripted scenarios behind the **`/sample`** command.
+
 ## Why it's different
 
 | | Typical coding agents | nerve |
@@ -112,7 +119,8 @@ Full detail: [architecture](doc/engineering/architecture.md) ·
 
 **Web workspace (live demo):**
 <https://includecctype.github.io/nerve-ibm-bob-2-0-hackathon/> — the same Ink
-terminal plus an OCI-backed file explorer and viewer.
+terminal plus an OCI-backed file explorer and viewer. Type **`/sample`** to run one of
+ten scripted scenarios that build a task graph and incrementally re-plan it.
 
 **Backend** (Python 3.13 + [uv](https://docs.astral.sh/uv/)):
 
