@@ -14,7 +14,8 @@ terminal in the DOM), alongside an OCI-backed file explorer and a file viewer:
 
 - **`src/terminal/`** — the Ink app, ported from `terminal/`. Config and sessions
   live in `localStorage`; the backend URL comes from `NERVE_BACKEND_URL`.
-  The client connects with `client_kind: "web"`.
+  The client connects with `client_kind: "web"` and defaults to the provided
+  model (id 6), which the backend funds via `PROVIDED_MODEL_KEY`.
 - **`src/storage/`** — a typed Socket.IO client for the storage events
   (`storage_session`/`storage_listing`/`storage_content`/`storage_change`) plus
   React hooks (`useSessionFolder`, `useDirectory`, `useFileContent`).
@@ -65,3 +66,7 @@ the backend's `WEB_ALLOWED_ORIGINS` includes the deployed origin.
 `.github/workflows/web-pages.yml` automates GitHub Pages: set the
 `NERVE_BACKEND_URL` repository variable and enable Pages with the "GitHub
 Actions" source.
+
+## Documentation
+
+Full reference: [`doc/web_reference.md`](../doc/engineering/web_reference.md).
