@@ -4,11 +4,14 @@ import asyncio
 import logging
 from dataclasses import dataclass
 
+from gateway.state.exec_scheduler import beginPlanning, endPlanning, stopExecution
+
 logger = logging.getLogger(__name__)
 
 PROMPT_KIND_USER = "user"
 PROMPT_KIND_QUESTIONNAIRE = "questionnaire"
 PROMPT_KIND_GIVE_UP = "give_up"
+PROMPT_KIND_RESULTS = "results"
 
 
 @dataclass(slots=True)
@@ -33,12 +36,12 @@ def _queueFor(sid: str) -> asyncio.Queue[PromptJob]:
 
 
 async def _runPromptWorker(sid: str) -> None:
-    """Drain the session's prompt queue one turn at a time.
+    """Drain the session's prompt queue one planning turn at a time.
 
-    Strict single-flight: the next prompt only starts once the previous turn —
-    including its task-graph execution — has fully finished. This keeps the
-    shared agent session and task graph free of concurrent writers, so a prompt
-    is never dropped.
+    Single-flight turns keep the shared agent session and task graph free of
+    concurrent writers. Task-graph execution is detached, so a turn returns as
+    soon as it has started or extended the background pass; the planning gate
+    keeps that pass from finishing while a later prompt is still morphing.
     """
     from gateway.agent.invoke_main_agent import invokeMainAgent
     from gateway.config import connected_users
@@ -46,6 +49,7 @@ async def _runPromptWorker(sid: str) -> None:
     queue = _queueFor(sid)
     while True:
         job = await queue.get()
+        beginPlanning(sid)
         try:
             if sid not in connected_users:
                 break
@@ -57,6 +61,7 @@ async def _runPromptWorker(sid: str) -> None:
         except Exception:
             logger.exception("[prompt] job failed sid=%s kind=%s", sid, job.kind)
         finally:
+            endPlanning(sid)
             queue.task_done()
 
 
@@ -69,7 +74,8 @@ def startPromptQueue(sid: str) -> None:
 
 
 async def stopPromptQueue(sid: str) -> None:
-    """Cancel the worker and drop any queued work for a session."""
+    """Cancel execution and the worker, then drop any queued work for a session."""
+    await stopExecution(sid)
     worker = _workers.pop(sid, None)
     if worker is not None and not worker.done():
         worker.cancel()
