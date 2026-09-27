@@ -8,10 +8,19 @@ dependencies are finished; tasks inside a category run sequentially. The graph
 survives across prompts, so a new prompt **morphs** pending work instead of
 re-planning from scratch, and running work is never mutated.
 
+Prompts are handled by one worker per session, and task-graph execution runs in a
+**detached background pass**: `executeCurrentTask` starts or joins the pass and
+returns immediately, so a prompt sent while work is running is planned right away
+and its categories **join the running pass**. When the pass drains, the main
+agent reports the outcome as a separate message.
+
 In the terminal client, file and shell tools are **forwarded to the CLI** and
 executed on your machine — the backend never touches your working directory. In
 the web workspace they run on the backend against the session's OCI Object
 Storage folder instead.
+
+Full reference documentation lives in [`doc/`](doc/README.md) (engineering and
+product).
 
 ## Repository layout
 
@@ -20,6 +29,7 @@ Storage folder instead.
 | `backend/` | Python 3.13 Socket.IO gateway (`python-socketio` + uvicorn), LangChain/LangGraph agents, DAG scheduler |
 | `terminal/` | Node 22 + pnpm CLI (Ink/React) — the two-pane TUI |
 | `web/` | Vite + React browser workspace: Ink via ink-web, plus an OCI file explorer and viewer |
+| `doc/` | Engineering and product reference documentation |
 | `docker-compose.yml` | Runs the backend on `:8000` with a healthcheck |
 | `justfile` | Shortcuts for backend, CLI, web, and Docker |
 | `.github/workflows/ci.yml` | Lint / format / typecheck / build / security checks |
@@ -63,8 +73,10 @@ NERVE_BACKEND_URL=http://localhost:8000 pnpm dev     # tsx src/app.tsx
 pnpm build && pnpm start                             # tsup → dist/app.js → bin: nerve
 ```
 
-Without `NERVE_BACKEND_URL` the CLI connects to the public deployment
-(`https://nerve-boq5.onrender.com`).
+Without `NERVE_BACKEND_URL` the CLI falls back to its built-in deployment URL;
+set it to target a specific gateway, e.g.
+`https://nerve-ibm-bob-2-0-hackathon.onrender.com` (reference deployment) or
+`http://localhost:8000` (local backend).
 
 ### 3. Docker (backend only)
 
@@ -84,6 +96,7 @@ dependency — nothing else needs to be running.
 |---|---|
 | `just backend` | uvicorn gateway on `:8000` (Doppler-wrapped) |
 | `just terminal` | `pnpm install --frozen-lockfile && pnpm dev` for the CLI (`frontend` is an alias) |
+| `just web` / `just web-build` | install + `pnpm dev` / `pnpm build` for the web workspace |
 | `just run` | `docker-up`, then the CLI in the foreground |
 | `just docker-up` / `docker-down` / `docker-build` / `docker-build-no-cache` / `docker-logs` | Compose lifecycle |
 | `just opencode` / `opencode-continue` / `bob` / `bob-run` / `bob-resume` | agent helpers (need Doppler) |
@@ -101,7 +114,8 @@ enters command mode; `Esc` clears the prompt.
 | `/restart` | reconnect to the backend |
 | `/exit` | flush config to disk and quit |
 
-Models are selected by id (stored in `user_config/config.json`):
+Models are selected by id (stored in `user_config/config.json`). The CLI offers
+ids 1–5; the web workspace adds the provided model 6 and defaults to it:
 
 | Id | Model |
 |---|---|
@@ -200,7 +214,7 @@ enable Pages with the "GitHub Actions" source first.
 | Variable | Read by | Purpose |
 |---|---|---|
 | `WEB_SEARCH_API` | backend (`backend/systemconfig/websearch.py`) | Exa key for `webSearch` / `webFetch` |
-| `NERVE_BACKEND_URL` | CLI (`terminal/src/socket/client.ts`) and web (`web/src/terminal/socket/client.ts`) | gateway URL; the CLI defaults to the public deployment, the web build to `http://localhost:8000` |
+| `NERVE_BACKEND_URL` | CLI (`terminal/src/socket/client.ts`) and web (`web/src/terminal/socket/client.ts`) | gateway URL; the CLI falls back to its built-in deployment, the web build to `http://localhost:8000` |
 | `WEB_ALLOWED_ORIGINS` | backend (`backend/gateway/config.py`) | comma-separated browser origins allowed to connect; defaults to any (`*`) |
 | `PROVIDED_MODEL_KEY` | backend (`backend/model/model_client.py`) | operator-funded key for model 6 (DeepSeek Flash, web-only); used server-side and never sent to clients |
 | `OCI_TENANCY` / `OCI_USER` / `OCI_FINGERPRINT` / `OCI_REGION` | backend (`backend/storage/oci/oci_client.py`) | OCI API-key identity and region |
@@ -212,6 +226,18 @@ enable Pages with the "GitHub Actions" source first.
 `.env` and `web/.env` are git-ignored; `.env.example` and `web/.env.example`
 list the keys with blank values. OCI credentials are read entirely from the
 environment.
+
+## Rate limits
+
+The public gateway protects itself per client IP (`backend/systemconfig/limits.py`):
+
+| Limit | Value |
+|---|---|
+| Connect | 30 connections / 60 s |
+| Prompts | 20 prompts / 4 h |
+
+A throttled client receives `rate_limited {retry_after}` for prompts, or
+`connection_status: false` on connect.
 
 ## Checks
 
@@ -230,8 +256,8 @@ cd backend  && uv sync --all-extras && uv run ruff check . && uv run black --che
 | Backend Lint / Format / Security | `ruff check .` / `black --check .` / `bandit -r . -c pyproject.toml` |
 | Secret Scan | `gitleaks` (allowlist: `.env.example`) |
 
-There is **no automated test suite**; verification is lint + format + typecheck
-+ secret scan, plus the manual end-to-end demo.
+Verification is lint + format + typecheck + build + secret scan, plus the manual
+end-to-end demo.
 
 ## How IBM Bob was used to build this
 
@@ -246,12 +272,4 @@ The agent configuration is committed and verifiable:
 
 Process: one **git worktree per concern**, each landed through its own pull
 request with green checks before merge; agents used for planning, bug hunting,
-and documentation — not for runtime features. **There is no Bob integration in
-the runtime code.**
-
-## Known limitations
-
-- Backend session state is in-process: a gateway restart drops live graphs (the
-  CLI's saved session can resume them).
-- No MCP server, IBM Bob integration, approval policies, or cross-prompt
-  similarity/contradiction handling — those ideas are not implemented.
+and documentation — not as a runtime dependency.
