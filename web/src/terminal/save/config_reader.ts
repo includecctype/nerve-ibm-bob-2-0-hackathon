@@ -1,7 +1,7 @@
 import type { SessionData } from "../dto/wire";
 import type { UserData } from "../session/user_data";
 import { type ConfigFile, DEFAULT_CONFIG } from "../systemconfig/file";
-import { MODEL_OPTIONS } from "../systemconfig/model";
+import { PROVIDED_MODEL_ID } from "../systemconfig/model";
 import { CONFIG_STORAGE_KEY } from "./config_path";
 
 function readStoredConfig(): ConfigFile {
@@ -11,7 +11,7 @@ function readStoredConfig(): ConfigFile {
     const parsed = JSON.parse(raw) as Partial<ConfigFile>;
     return {
       api_key: parsed.api_key ?? {},
-      main_agent_id: parsed.main_agent_id ?? 1,
+      main_agent_id: parsed.main_agent_id ?? PROVIDED_MODEL_ID,
       session: parsed.session ?? {},
     };
   } catch {
@@ -22,12 +22,10 @@ function readStoredConfig(): ConfigFile {
 export async function readConfig(): Promise<UserData> {
   const config = readStoredConfig();
 
-  const valid_model = MODEL_OPTIONS.some((m) => m.id === config.main_agent_id);
-  const main_agent_id = valid_model ? config.main_agent_id : 1;
-
   return {
     api_keys: { ...config.api_key },
-    main_agent_id,
+    // A web visit is fresh: always start on the operator-provided model.
+    main_agent_id: PROVIDED_MODEL_ID,
     session_id: crypto.randomUUID(),
     session_committed: false,
     categories: [],

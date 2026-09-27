@@ -15,17 +15,18 @@ from model.agent_session import AgentSession
 model_cache: dict[tuple[int, str], BaseChatModel] = {}
 
 PROVIDER_MAP = {
-    1: ("deepseek", "deepseek-flash"),
-    2: ("openrouter", "auto"),
-    3: ("groq", "openai/gpt-oss-120b"),
-    4: ("anthropic", "claude-fable-5"),
-    5: ("baseten", "moonshotai/Kimi-K2.6"),
-    6: ("deepseek", "deepseek-chat"),
+    1: ("openrouter", "auto"),
+    2: ("groq", "openai/gpt-oss-120b"),
+    3: ("anthropic", "claude-fable-5"),
+    4: ("baseten", "moonshotai/Kimi-K2.6"),
+    5: ("deepseek", "deepseek-chat"),
+    6: ("deepseek", "deepseek-flash"),
 }
 
-# Model 1 is "provided": the operator funds it, so its key comes from the
-# environment instead of the client, and the funded key is never sent to clients.
-PROVIDED_AGENT_ID = 1
+# Model 6 is "provided" and web-only: the operator funds it, so its key comes
+# from the environment instead of the client, and the funded key is never sent
+# to clients.
+PROVIDED_AGENT_ID = 6
 PROVIDED_MODEL_ENV = "PROVIDED_MODEL_KEY"
 
 

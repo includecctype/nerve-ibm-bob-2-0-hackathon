@@ -1,4 +1,5 @@
 import type { SessionData } from "../dto/wire";
+import { PROVIDED_MODEL_ID } from "./model";
 
 export const CONFIG_FILE_PATH_DIR = "user_config/";
 export const CONFIG_FILE_NAME = "config.json";
@@ -11,6 +12,6 @@ export type ConfigFile = {
 
 export const DEFAULT_CONFIG: ConfigFile = {
   api_key: {},
-  main_agent_id: 1,
+  main_agent_id: PROVIDED_MODEL_ID,
   session: {},
 };
