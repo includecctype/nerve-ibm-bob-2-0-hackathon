@@ -130,11 +130,12 @@ uv sync --all-extras
 uv run main.py                     # → Uvicorn on 0.0.0.0:8000
 ```
 
-**CLI** (Node 22 + pnpm):
+**CLI** (Node 22) — run the published package, or from source with pnpm:
 
 ```bash
-cd terminal
-pnpm install
+npx nervous-cli                   # reference deployment (baked at publish)
+
+cd terminal && pnpm install       # from source
 NERVE_BACKEND_URL=http://localhost:8000 pnpm dev
 ```
 

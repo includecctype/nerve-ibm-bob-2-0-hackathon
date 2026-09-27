@@ -1,15 +1,19 @@
 {
-  "name": "nerve-cli",
-  "version": "1.0.0",
+  "name": "nervous-cli",
+  "version": "1.0.1",
   "description": "nerve — terminal-native multi-agent coding orchestrator",
   "type": "module",
   "packageManager": "pnpm@12.5.1",
+  "files": [
+    "dist"
+  ],
   "bin": {
     "nerve": "./dist/app.js"
   },
   "scripts": {
     "dev": "tsx src/app.tsx",
     "build": "tsup",
+    "prepublishOnly": "pnpm build",
     "start": "node dist/app.js",
     "typecheck": "tsc --noEmit",
     "lint": "biome lint src",
